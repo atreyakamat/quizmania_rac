@@ -1,0 +1,20 @@
+{
+  "name": "quizmania-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reusable Quiz Management Platform with Private Admin and Public Quiz Applications",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n \"ADMIN,PUBLIC\" -c \"blue,green\" \"npm run dev --workspace=@quizmania/admin\" \"npm run dev --workspace=@quizmania/public\"",
+    "dev:admin": "npm run dev --workspace=@quizmania/admin",
+    "dev:public": "npm run dev --workspace=@quizmania/public",
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}

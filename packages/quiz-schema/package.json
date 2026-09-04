@@ -1,0 +1,16 @@
+{
+  "name": "@quizmania/quiz-schema",
+  "version": "0.1.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@quizmania/types": "*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
