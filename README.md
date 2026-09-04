@@ -30,11 +30,11 @@ QuizMania is organized as a clean npm monorepo with strict architectural separat
 ```
 quizmania/
 ├── apps/
-│   ├── admin/                    # Private Local Admin Application (:3001)
+│   ├── admin/                    # Private Local Admin Application (:3011)
 │   │   ├── src/app/              # Next.js App Router (Dashboard, Quizzes, Themes, Media, Results)
 │   │   ├── src/components/       # QuizEditor, QuestionEditor, OptionEditor, ThemeEditor, Importer
 │   │   └── public/branding/      # Rotaract Club of Mapusa brand assets
-│   └── public/                   # Public Quiz Application (:3000)
+│   └── public/                   # Public Quiz Application (:3010)
 │       ├── src/app/              # Next.js App Router (Landing, /quizzes, /q/[slug], /api/submit)
 │       ├── src/components/       # Hero, QuizCard, About, HowItWorks, RotaractSection, QuizRunner
 │       └── public/branding/      # Rotaract Club of Mapusa brand assets
@@ -53,7 +53,7 @@ quizmania/
 1. **Zero Client-Side Correct Answers**: The public quiz frontend and its Data Access Layer (`getPublishedQuizBySlug`) **never** receive `is_correct`, correct answers, or private metadata.
 2. **Server-Side Scoring Engine**: Participant answers are evaluated exclusively server-side via `POST /api/quizzes/[slug]/submit` or the PostgreSQL `submit_quiz_answers` stored procedure (`SECURITY DEFINER`).
 3. **Row Level Security (RLS)**: Public anonymous users are restricted from viewing draft quizzes, reading `options.is_correct`, or inspecting other participants' submissions.
-4. **Standalone Private Admin**: Designed to execute in a local environment (`localhost:3001`) with administrative privileges, keeping admin routes unexposed to public participants.
+4. **Standalone Private Admin**: Designed to execute in a local environment (`localhost:3011`) with administrative privileges, keeping admin routes unexposed to public participants.
 
 ---
 
@@ -75,10 +75,10 @@ npm run dev
 
 Or start each app individually:
 ```bash
-# Start Private Admin Studio (Port 3001)
+# Start Private Admin Studio (Port 3011)
 npm run dev:admin
 
-# Start Public Quiz Experience (Port 3000)
+# Start Public Quiz Experience (Port 3010)
 npm run dev:public
 ```
 
@@ -93,14 +93,14 @@ npm run build
 
 | Application | URL | Description |
 |---|---|---|
-| **Public Landing Page** | [http://localhost:3000](http://localhost:3000) | Main QuizMania landing page with Hero, Featured Quizzes, and Rotaract section |
-| **Public Quiz Directory** | [http://localhost:3000/quizzes](http://localhost:3000/quizzes) | Directory of all published quizzes |
-| **Sample Public Quiz** | [http://localhost:3000/q/rotaract-youth-bowl-2026](http://localhost:3000/q/rotaract-youth-bowl-2026) | Live quiz runner for Rotaract Youth Knowledge Bowl 2026 |
-| **Sample Nutrition Quiz** | [http://localhost:3000/q/nutrition-week-2026](http://localhost:3000/q/nutrition-week-2026) | Live quiz runner for Nutrition Week 2026 |
-| **Admin Studio Dashboard** | [http://localhost:3001](http://localhost:3001) | Private local admin metrics, quick actions, and recent quizzes |
-| **Admin Quiz Builder** | [http://localhost:3001/quizzes/create](http://localhost:3001/quizzes/create) | Quiz metadata, questions, marks, options, and live preview |
-| **Admin Theme Designer** | [http://localhost:3001/themes](http://localhost:3001/themes) | Dynamic CSS variables theme manager and preview |
-| **Admin JSON Importer** | [http://localhost:3001/quizzes?tab=import](http://localhost:3001/quizzes?tab=import) | Validates and imports quiz JSON with Zod error handling |
+| **Public Landing Page** | [http://localhost:3010](http://localhost:3010) | Main QuizMania landing page with Hero, Featured Quizzes, and Rotaract section |
+| **Public Quiz Directory** | [http://localhost:3010/quizzes](http://localhost:3010/quizzes) | Directory of all published quizzes |
+| **Sample Public Quiz** | [http://localhost:3010/q/rotaract-youth-bowl-2026](http://localhost:3010/q/rotaract-youth-bowl-2026) | Live quiz runner for Rotaract Youth Knowledge Bowl 2026 |
+| **Sample Nutrition Quiz** | [http://localhost:3010/q/nutrition-week-2026](http://localhost:3010/q/nutrition-week-2026) | Live quiz runner for Nutrition Week 2026 |
+| **Admin Studio Dashboard** | [http://localhost:3011](http://localhost:3011) | Private local admin metrics, quick actions, and recent quizzes |
+| **Admin Quiz Builder** | [http://localhost:3011/quizzes/create](http://localhost:3011/quizzes/create) | Quiz metadata, questions, marks, options, and live preview |
+| **Admin Theme Designer** | [http://localhost:3011/themes](http://localhost:3011/themes) | Dynamic CSS variables theme manager and preview |
+| **Admin JSON Importer** | [http://localhost:3011/quizzes?tab=import](http://localhost:3011/quizzes?tab=import) | Validates and imports quiz JSON with Zod error handling |
 
 ---
 

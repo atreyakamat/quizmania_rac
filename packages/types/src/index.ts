@@ -1,5 +1,6 @@
 /**
  * Core Type Definitions for Quiz Management Platform
+ * QuizMania - Rotaract Club of Mapusa
  */
 
 export type QuizStatus = 'draft' | 'published' | 'closed' | 'archived';
@@ -15,8 +16,8 @@ export interface Theme {
   surface_color: string;
   text_color: string;
   button_color: string;
-  border_radius: string; // e.g. '0.5rem', '8px', '12px'
-  font_family: string;   // e.g. 'Inter, sans-serif'
+  border_radius: string;
+  font_family: string;
   created_at?: string;
 }
 
@@ -28,6 +29,7 @@ export interface QuizSettings {
   show_score_immediately?: boolean;
   allow_review?: boolean;
   require_participant_email?: boolean;
+  collect_club_details?: boolean; // For Rotaract event quizzes
 }
 
 export interface Option {
@@ -128,6 +130,9 @@ export interface Answer {
 export interface ParticipantInfo {
   name: string;
   email?: string;
+  club_name?: string;
+  district_number?: string;
+  position?: string;
   data?: Record<string, any>;
 }
 

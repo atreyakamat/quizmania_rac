@@ -198,7 +198,7 @@ export default async function AdminDashboardPage() {
                       </Link>
                       {quiz.status === 'published' && (
                         <a
-                          href={`http://localhost:3000/q/${quiz.slug}`}
+                          href={`http://localhost:3010/q/${quiz.slug}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-xs font-medium text-emerald-600 hover:text-emerald-800 inline-flex items-center gap-0.5"

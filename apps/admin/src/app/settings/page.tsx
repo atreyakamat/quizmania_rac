@@ -34,7 +34,7 @@ export default function SettingsPage() {
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
               <span className="text-xs font-bold text-slate-700 block mb-1">Private Admin App</span>
               <p className="text-xs text-slate-500">
-                Runs locally on <span className="font-mono text-blue-600">http://localhost:3001</span>.
+                Runs locally on <span className="font-mono text-blue-600">http://localhost:3011</span>.
                 Accesses admin DAL with full CRUD, previewing, and publishing capabilities.
               </p>
             </div>
@@ -42,7 +42,7 @@ export default function SettingsPage() {
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
               <span className="text-xs font-bold text-slate-700 block mb-1">Public Quiz App</span>
               <p className="text-xs text-slate-500">
-                Runs on <span className="font-mono text-emerald-600">http://localhost:3000</span>.
+                Runs on <span className="font-mono text-emerald-600">http://localhost:3010</span>.
                 Participants access published quizzes at <span className="font-mono text-emerald-600">/q/[slug]</span>.
                 Never receives correct answers.
               </p>

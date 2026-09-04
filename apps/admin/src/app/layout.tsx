@@ -1,10 +1,10 @@
 import React from 'react';
 import './globals.css';
-import { AdminSidebar } from '@/components/AdminSidebar';
+import { AdminShell } from '@/components/AdminShell';
 
 export const metadata = {
-  title: 'Quiz Management Platform - Admin',
-  description: 'Private administration panel for Quiz Management Platform',
+  title: 'QuizMania Admin Studio - Rotaract Club of Mapusa',
+  description: 'Private administration panel for QuizMania',
 };
 
 export default function RootLayout({
@@ -14,11 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-slate-50 min-h-screen flex antialiased">
-        <AdminSidebar />
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <body className="bg-[#FAF8F9] min-h-screen antialiased">
+        <AdminShell>
           {children}
-        </div>
+        </AdminShell>
       </body>
     </html>
   );

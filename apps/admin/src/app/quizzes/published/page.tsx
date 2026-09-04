@@ -51,12 +51,12 @@ export default async function PublishedQuizzesPage() {
                     </td>
                     <td className="px-6 py-4">
                       <a
-                        href={`http://localhost:3000/q/${quiz.slug}`}
+                        href={`http://localhost:3010/q/${quiz.slug}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs font-medium text-blue-600 hover:underline inline-flex items-center gap-1 font-mono"
                       >
-                        <span>http://localhost:3000/q/{quiz.slug}</span>
+                        <span>http://localhost:3010/q/{quiz.slug}</span>
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     </td>

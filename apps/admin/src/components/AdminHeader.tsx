@@ -24,7 +24,7 @@ export function AdminHeader({ title = 'Administration', subtitle, action }: Admi
         <div className="h-6 w-[1px] bg-slate-200" />
 
         <a
-          href="http://localhost:3000"
+          href="http://localhost:3010"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 transition-colors"

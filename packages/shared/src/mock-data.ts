@@ -40,83 +40,15 @@ export const mockThemes: Theme[] = [
     border_radius: '1rem',
     font_family: 'Inter, system-ui, sans-serif',
     created_at: new Date().toISOString()
-  },
-  {
-    id: 'theme-modern-slate',
-    name: 'Modern Slate',
-    primary_color: '#475569',
-    secondary_color: '#94A3B8',
-    background_color: '#F8FAFC',
-    surface_color: '#FFFFFF',
-    text_color: '#0F172A',
-    button_color: '#0F172A',
-    border_radius: '0.5rem',
-    font_family: 'Inter, system-ui, sans-serif',
-    created_at: new Date().toISOString()
   }
 ];
 
 export const mockQuizzes: Quiz[] = [
   {
-    id: 'quiz-rotaract-mapusa-championship',
-    title: 'Rotaract Youth Knowledge Bowl 2026',
-    slug: 'rotaract-youth-bowl-2026',
-    description: 'The premier annual inter-college knowledge challenge hosted by Rotaract Club of Mapusa.',
-    cover_image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=1200&auto=format&fit=crop&q=80',
-    status: 'published',
-    theme_id: 'theme-quizmania-signature',
-    theme: mockThemes[0],
-    settings: {
-      time_limit_minutes: 20,
-      shuffle_questions: false,
-      shuffle_options: false,
-      passing_score_percentage: 60,
-      show_score_immediately: true,
-      allow_review: true,
-      require_participant_email: true
-    },
-    created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-    updated_at: new Date().toISOString(),
-    questions: [
-      {
-        id: 'rk-1',
-        quiz_id: 'quiz-rotaract-mapusa-championship',
-        question_text: 'What is the primary motto of Rotary and Rotaract worldwide?',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 10,
-        required: true,
-        question_order: 1,
-        options: [
-          { id: 'ro-1-1', question_id: 'rk-1', option_text: 'Service Above Self', option_image: null, is_correct: true, option_order: 1 },
-          { id: 'ro-1-2', question_id: 'rk-1', option_text: 'Excellence in Action', option_image: null, is_correct: false, option_order: 2 },
-          { id: 'ro-1-3', question_id: 'rk-1', option_text: 'Leadership for Tomorrow', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'ro-1-4', question_id: 'rk-1', option_text: 'Unity in Diversity', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      },
-      {
-        id: 'rk-2',
-        quiz_id: 'quiz-rotaract-mapusa-championship',
-        question_text: 'In which famous North Goa town is the historical Friday Market located?',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 10,
-        required: true,
-        question_order: 2,
-        options: [
-          { id: 'ro-2-1', question_id: 'rk-2', option_text: 'Panaji', option_image: null, is_correct: false, option_order: 1 },
-          { id: 'ro-2-2', question_id: 'rk-2', option_text: 'Mapusa', option_image: null, is_correct: true, option_order: 2 },
-          { id: 'ro-2-3', question_id: 'rk-2', option_text: 'Margao', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'ro-2-4', question_id: 'rk-2', option_text: 'Vasco da Gama', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      }
-    ]
-  },
-  {
     id: 'quiz-nutrition-week-2026',
-    title: 'Nutrition Week Quiz',
+    title: 'Nutrition Week Quiz 2026',
     slug: 'nutrition-week-2026',
-    description: 'Test your knowledge about nutrition, vital micronutrients, and healthy dietary habits.',
+    description: 'Celebrate Nutrition Week with the Rotaract Club of Mapusa! Test your knowledge about healthy eating, nutrients, and balanced lifestyles. (Eligible for club collaboration recognition: minimum 3 members required per club).',
     cover_image: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=1200&auto=format&fit=crop&q=80',
     status: 'published',
     theme_id: 'theme-quizmania-signature',
@@ -128,146 +60,202 @@ export const mockQuizzes: Quiz[] = [
       passing_score_percentage: 60,
       show_score_immediately: true,
       allow_review: true,
-      require_participant_email: true
+      require_participant_email: true,
+      collect_club_details: true
     },
     created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
     updated_at: new Date().toISOString(),
     questions: [
       {
-        id: 'q1',
+        id: 'nq-1',
         quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'Which nutrient is primarily responsible for building and repairing body tissues, including muscle?',
+        question_text: "Which nutrient is the body's primary source of energy?",
         question_type: 'single_choice',
         question_image: null,
         marks: 5,
         required: true,
         question_order: 1,
         options: [
-          { id: 'opt-1-1', question_id: 'q1', option_text: 'Carbohydrates', option_image: null, is_correct: false, option_order: 1 },
-          { id: 'opt-1-2', question_id: 'q1', option_text: 'Protein', option_image: null, is_correct: true, option_order: 2 },
-          { id: 'opt-1-3', question_id: 'q1', option_text: 'Vitamins', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'opt-1-4', question_id: 'q1', option_text: 'Water', option_image: null, is_correct: false, option_order: 4 }
+          { id: 'nq-1-a', question_id: 'nq-1', option_text: 'Vitamins', option_image: null, is_correct: false, option_order: 1 },
+          { id: 'nq-1-b', question_id: 'nq-1', option_text: 'Proteins', option_image: null, is_correct: false, option_order: 2 },
+          { id: 'nq-1-c', question_id: 'nq-1', option_text: 'Carbohydrates', option_image: null, is_correct: true, option_order: 3 },
+          { id: 'nq-1-d', question_id: 'nq-1', option_text: 'Minerals', option_image: null, is_correct: false, option_order: 4 }
         ]
       },
       {
-        id: 'q2',
+        id: 'nq-2',
         quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'Which vitamin is synthesized in human skin upon adequate exposure to sunlight?',
+        question_text: 'Which vitamin is mainly produced in the body when the skin is exposed to sunlight?',
         question_type: 'single_choice',
         question_image: null,
         marks: 5,
         required: true,
         question_order: 2,
         options: [
-          { id: 'opt-2-1', question_id: 'q2', option_text: 'Vitamin A', option_image: null, is_correct: false, option_order: 1 },
-          { id: 'opt-2-2', question_id: 'q2', option_text: 'Vitamin B12', option_image: null, is_correct: false, option_order: 2 },
-          { id: 'opt-2-3', question_id: 'q2', option_text: 'Vitamin C', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'opt-2-4', question_id: 'q2', option_text: 'Vitamin D', option_image: null, is_correct: true, option_order: 4 }
+          { id: 'nq-2-a', question_id: 'nq-2', option_text: 'Vitamin A', option_image: null, is_correct: false, option_order: 1 },
+          { id: 'nq-2-b', question_id: 'nq-2', option_text: 'Vitamin C', option_image: null, is_correct: false, option_order: 2 },
+          { id: 'nq-2-c', question_id: 'nq-2', option_text: 'Vitamin D', option_image: null, is_correct: true, option_order: 3 },
+          { id: 'nq-2-d', question_id: 'nq-2', option_text: 'Vitamin K', option_image: null, is_correct: false, option_order: 4 }
         ]
       },
       {
-        id: 'q3',
+        id: 'nq-3',
         quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'What is the primary dietary role of soluble fiber?',
+        question_text: 'Which nutrient is especially important for building and repairing body tissues?',
         question_type: 'single_choice',
         question_image: null,
         marks: 5,
         required: true,
         question_order: 3,
         options: [
-          { id: 'opt-3-1', question_id: 'q3', option_text: 'Assists in slowing digestion and regulating blood glucose levels', option_image: null, is_correct: true, option_order: 1 },
-          { id: 'opt-3-2', question_id: 'q3', option_text: 'Provides immediate high-energy calories', option_image: null, is_correct: false, option_order: 2 },
-          { id: 'opt-3-3', question_id: 'q3', option_text: 'Increases bone density directly', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'opt-3-4', question_id: 'q3', option_text: 'Acts as the principal carrier of oxygen in hemoglobin', option_image: null, is_correct: false, option_order: 4 }
+          { id: 'nq-3-a', question_id: 'nq-3', option_text: 'Protein', option_image: null, is_correct: true, option_order: 1 },
+          { id: 'nq-3-b', question_id: 'nq-3', option_text: 'Fibre', option_image: null, is_correct: false, option_order: 2 },
+          { id: 'nq-3-c', question_id: 'nq-3', option_text: 'Water', option_image: null, is_correct: false, option_order: 3 },
+          { id: 'nq-3-d', question_id: 'nq-3', option_text: 'Carbohydrates', option_image: null, is_correct: false, option_order: 4 }
         ]
       },
       {
-        id: 'q4',
+        id: 'nq-4',
         quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'Roughly what percentage of the healthy adult human body consists of water?',
+        question_text: 'Which of the following foods is generally a good source of dietary fibre?',
         question_type: 'single_choice',
         question_image: null,
         marks: 5,
-        required: false,
+        required: true,
         question_order: 4,
         options: [
-          { id: 'opt-4-1', question_id: 'q4', option_text: 'Around 25% - 35%', option_image: null, is_correct: false, option_order: 1 },
-          { id: 'opt-4-2', question_id: 'q4', option_text: 'Around 55% - 65%', option_image: null, is_correct: true, option_order: 2 },
-          { id: 'opt-4-3', question_id: 'q4', option_text: 'Around 80% - 90%', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'opt-4-4', question_id: 'q4', option_text: 'Around 95% - 99%', option_image: null, is_correct: false, option_order: 4 }
+          { id: 'nq-4-a', question_id: 'nq-4', option_text: 'White sugar', option_image: null, is_correct: false, option_order: 1 },
+          { id: 'nq-4-b', question_id: 'nq-4', option_text: 'Whole grains', option_image: null, is_correct: true, option_order: 2 },
+          { id: 'nq-4-c', question_id: 'nq-4', option_text: 'Butter', option_image: null, is_correct: false, option_order: 3 },
+          { id: 'nq-4-d', question_id: 'nq-4', option_text: 'Soft drinks', option_image: null, is_correct: false, option_order: 4 }
         ]
-      }
-    ]
-  },
-  {
-    id: 'quiz-js-web-fundamentals',
-    title: 'Modern Web & Cloud Architecture',
-    slug: 'web-cloud-fundamentals',
-    description: 'Explore the foundations of scalable cloud systems, RESTful microservices, and client-server protocols.',
-    cover_image: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=1200&auto=format&fit=crop&q=80',
-    status: 'published',
-    theme_id: 'theme-ocean-blue',
-    theme: mockThemes[2],
-    settings: {
-      time_limit_minutes: 20,
-      shuffle_questions: false,
-      shuffle_options: false,
-      passing_score_percentage: 70,
-      show_score_immediately: true,
-      allow_review: true,
-      require_participant_email: false
-    },
-    created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
-    updated_at: new Date().toISOString(),
-    questions: [
+      },
       {
-        id: 'web-q1',
-        quiz_id: 'quiz-js-web-fundamentals',
-        question_text: 'Which HTTP status code signifies that a resource was successfully created on the server?',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 10,
-        required: true,
-        question_order: 1,
-        options: [
-          { id: 'w1-1', question_id: 'web-q1', option_text: '200 OK', option_image: null, is_correct: false, option_order: 1 },
-          { id: 'w1-2', question_id: 'web-q1', option_text: '201 Created', option_image: null, is_correct: true, option_order: 2 },
-          { id: 'w1-3', question_id: 'web-q1', option_text: '204 No Content', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'w1-4', question_id: 'web-q1', option_text: '301 Moved Permanently', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'quiz-draft-general-knowledge',
-    title: 'General Science & Technology',
-    slug: 'general-science-tech',
-    description: 'Upcoming draft quiz covering astronomy, physics, and basic computing.',
-    cover_image: null,
-    status: 'draft',
-    theme_id: 'theme-modern-slate',
-    theme: mockThemes[3],
-    settings: {
-      passing_score_percentage: 50,
-      show_score_immediately: true,
-      allow_review: true,
-      require_participant_email: false
-    },
-    created_at: new Date(Date.now() - 86400000).toISOString(),
-    updated_at: new Date().toISOString(),
-    questions: [
-      {
-        id: 'draft-q1',
-        quiz_id: 'quiz-draft-general-knowledge',
-        question_text: 'What is the closest star to planet Earth?',
+        id: 'nq-5',
+        quiz_id: 'quiz-nutrition-week-2026',
+        question_text: 'Which mineral is important for maintaining healthy bones and teeth?',
         question_type: 'single_choice',
         question_image: null,
         marks: 5,
         required: true,
-        question_order: 1,
+        question_order: 5,
         options: [
-          { id: 'd1-1', question_id: 'draft-q1', option_text: 'Proxima Centauri', option_image: null, is_correct: false, option_order: 1 },
-          { id: 'd1-2', question_id: 'draft-q1', option_text: 'The Sun', option_image: null, is_correct: true, option_order: 2 }
+          { id: 'nq-5-a', question_id: 'nq-5', option_text: 'Iron', option_image: null, is_correct: false, option_order: 1 },
+          { id: 'nq-5-b', question_id: 'nq-5', option_text: 'Calcium', option_image: null, is_correct: true, option_order: 2 },
+          { id: 'nq-5-c', question_id: 'nq-5', option_text: 'Sodium', option_image: null, is_correct: false, option_order: 3 },
+          { id: 'nq-5-d', question_id: 'nq-5', option_text: 'Potassium', option_image: null, is_correct: false, option_order: 4 }
+        ]
+      },
+      {
+        id: 'nq-6',
+        quiz_id: 'quiz-nutrition-week-2026',
+        question_text: 'Which nutrient helps the body absorb certain vitamins and provides stored energy?',
+        question_type: 'single_choice',
+        question_image: null,
+        marks: 5,
+        required: true,
+        question_order: 6,
+        options: [
+          { id: 'nq-6-a', question_id: 'nq-6', option_text: 'Fats', option_image: null, is_correct: true, option_order: 1 },
+          { id: 'nq-6-b', question_id: 'nq-6', option_text: 'Water', option_image: null, is_correct: false, option_order: 2 },
+          { id: 'nq-6-c', question_id: 'nq-6', option_text: 'Minerals', option_image: null, is_correct: false, option_order: 3 },
+          { id: 'nq-6-d', question_id: 'nq-6', option_text: 'Fibre', option_image: null, is_correct: false, option_order: 4 }
+        ]
+      },
+      {
+        id: 'nq-7',
+        quiz_id: 'quiz-nutrition-week-2026',
+        question_text: 'Which of the following is generally considered a healthy snack option?',
+        question_type: 'single_choice',
+        question_image: null,
+        marks: 5,
+        required: true,
+        question_order: 7,
+        options: [
+          { id: 'nq-7-a', question_id: 'nq-7', option_text: 'Fresh fruit', option_image: null, is_correct: true, option_order: 1 },
+          { id: 'nq-7-b', question_id: 'nq-7', option_text: 'Candy', option_image: null, is_correct: false, option_order: 2 },
+          { id: 'nq-7-c', question_id: 'nq-7', option_text: 'Sugary soda', option_image: null, is_correct: false, option_order: 3 },
+          { id: 'nq-7-d', question_id: 'nq-7', option_text: 'Deep-fried chips', option_image: null, is_correct: false, option_order: 4 }
+        ]
+      },
+      {
+        id: 'nq-8',
+        quiz_id: 'quiz-nutrition-week-2026',
+        question_text: 'What is the main benefit of drinking enough water?',
+        question_type: 'single_choice',
+        question_image: null,
+        marks: 5,
+        required: true,
+        question_order: 8,
+        options: [
+          { id: 'nq-8-a', question_id: 'nq-8', option_text: 'It completely replaces meals', option_image: null, is_correct: false, option_order: 1 },
+          { id: 'nq-8-b', question_id: 'nq-8', option_text: 'It helps maintain normal body functions and hydration', option_image: null, is_correct: true, option_order: 2 },
+          { id: 'nq-8-c', question_id: 'nq-8', option_text: 'It provides large amounts of protein', option_image: null, is_correct: false, option_order: 3 },
+          { id: 'nq-8-d', question_id: 'nq-8', option_text: 'It replaces the need for fruits and vegetables', option_image: null, is_correct: false, option_order: 4 }
+        ]
+      },
+      {
+        id: 'nq-9',
+        quiz_id: 'quiz-nutrition-week-2026',
+        question_text: 'Which nutrient is important for carrying oxygen in the blood?',
+        question_type: 'single_choice',
+        question_image: null,
+        marks: 5,
+        required: true,
+        question_order: 9,
+        options: [
+          { id: 'nq-9-a', question_id: 'nq-9', option_text: 'Calcium', option_image: null, is_correct: false, option_order: 1 },
+          { id: 'nq-9-b', question_id: 'nq-9', option_text: 'Iron', option_image: null, is_correct: true, option_order: 2 },
+          { id: 'nq-9-c', question_id: 'nq-9', option_text: 'Vitamin C', option_image: null, is_correct: false, option_order: 3 },
+          { id: 'nq-9-d', question_id: 'nq-9', option_text: 'Fibre', option_image: null, is_correct: false, option_order: 4 }
+        ]
+      },
+      {
+        id: 'nq-10',
+        quiz_id: 'quiz-nutrition-week-2026',
+        question_text: 'A balanced diet generally includes:',
+        question_type: 'single_choice',
+        question_image: null,
+        marks: 5,
+        required: true,
+        question_order: 10,
+        options: [
+          { id: 'nq-10-a', question_id: 'nq-10', option_text: 'Only protein-rich foods', option_image: null, is_correct: false, option_order: 1 },
+          { id: 'nq-10-b', question_id: 'nq-10', option_text: 'Only fruits and vegetables', option_image: null, is_correct: false, option_order: 2 },
+          { id: 'nq-10-c', question_id: 'nq-10', option_text: 'A variety of foods from different food groups', option_image: null, is_correct: true, option_order: 3 },
+          { id: 'nq-10-d', question_id: 'nq-10', option_text: 'Only low-fat foods', option_image: null, is_correct: false, option_order: 4 }
+        ]
+      },
+      {
+        id: 'nq-11',
+        quiz_id: 'quiz-nutrition-week-2026',
+        question_text: 'Which of these is a good source of healthy unsaturated fats?',
+        question_type: 'single_choice',
+        question_image: null,
+        marks: 5,
+        required: true,
+        question_order: 11,
+        options: [
+          { id: 'nq-11-a', question_id: 'nq-11', option_text: 'Nuts', option_image: null, is_correct: true, option_order: 1 },
+          { id: 'nq-11-b', question_id: 'nq-11', option_text: 'Candy', option_image: null, is_correct: false, option_order: 2 },
+          { id: 'nq-11-c', question_id: 'nq-11', option_text: 'Soft drinks', option_image: null, is_correct: false, option_order: 3 },
+          { id: 'nq-11-d', question_id: 'nq-11', option_text: 'Refined sugar', option_image: null, is_correct: false, option_order: 4 }
+        ]
+      },
+      {
+        id: 'nq-12',
+        quiz_id: 'quiz-nutrition-week-2026',
+        question_text: 'Why is it beneficial to include a variety of fruits and vegetables in your diet?',
+        question_type: 'single_choice',
+        question_image: null,
+        marks: 5,
+        required: true,
+        question_order: 12,
+        options: [
+          { id: 'nq-12-a', question_id: 'nq-12', option_text: 'They provide a range of nutrients', option_image: null, is_correct: true, option_order: 1 },
+          { id: 'nq-12-b', question_id: 'nq-12', option_text: 'They eliminate the need for water', option_image: null, is_correct: false, option_order: 2 },
+          { id: 'nq-12-c', question_id: 'nq-12', option_text: 'They replace all other food groups', option_image: null, is_correct: false, option_order: 3 },
+          { id: 'nq-12-d', question_id: 'nq-12', option_text: 'They contain only carbohydrates', option_image: null, is_correct: false, option_order: 4 }
         ]
       }
     ]
@@ -277,20 +265,28 @@ export const mockQuizzes: Quiz[] = [
 export const mockSubmissions: Submission[] = [
   {
     id: 'sub-demo-1',
-    quiz_id: 'quiz-rotaract-mapusa-championship',
+    quiz_id: 'quiz-nutrition-week-2026',
     participant_name: 'Rahul Naik',
     participant_email: 'rahul.naik@rotaract.org',
-    participant_data: {},
-    score: 20,
+    participant_data: {
+      club_name: 'Rotaract Club of Mapusa',
+      district_number: '3170',
+      position: 'President'
+    },
+    score: 60,
     submitted_at: new Date(Date.now() - 3600000 * 2).toISOString()
   },
   {
     id: 'sub-demo-2',
     quiz_id: 'quiz-nutrition-week-2026',
-    participant_name: 'Alex Mercer',
-    participant_email: 'alex@example.com',
-    participant_data: {},
-    score: 15,
+    participant_name: 'Sarah Chen',
+    participant_email: 'sarah.c@rotaract.org',
+    participant_data: {
+      club_name: 'Rotaract Club of Panaji',
+      district_number: '3170',
+      position: 'Member'
+    },
+    score: 55,
     submitted_at: new Date(Date.now() - 3600000 * 4).toISOString()
   }
 ];

@@ -182,7 +182,7 @@ export function AdminSidebar() {
       <div className="p-4 border-t border-[#301322] bg-[#10060C] space-y-2">
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <div className="w-2 h-2 rounded-full bg-[#D83B70] animate-pulse" />
-          <span>Local Admin Studio (:3001)</span>
+          <span>Local Admin Studio (:3011)</span>
         </div>
         <p className="text-[10px] text-slate-500">
           Rotaract Club of Mapusa

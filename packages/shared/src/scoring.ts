@@ -3,17 +3,13 @@ import { getSupabaseAdminClient, isSupabaseAdminConfigured } from './supabase';
 import { mockStore } from './mock-data';
 
 /**
- * SECURE SCORING ENGINE (Server-side / Edge Function only)
- *
- * Validates participant responses against protected database records,
- * computes marks accurately, records submission in `submissions` and `answers`,
- * and returns a sanitized result without leaking correct answers.
+ * SECURE SCORING ENGINE (Server-side only)
+ * Evaluates participant responses, calculates marks, and stores submission.
  */
 export async function scoreAndRecordQuizSubmission(
   quizSlug: string,
   payload: QuizSubmissionPayload
 ): Promise<{ success: boolean; result?: QuizSubmissionResult; error?: string }> {
-  // 1. Fetch full quiz (including protected is_correct) using admin privileges
   let quiz: Quiz | null = null;
 
   if (isSupabaseAdminConfigured()) {
@@ -65,7 +61,7 @@ export async function scoreAndRecordQuizSubmission(
     return { success: false, error: 'Quiz has no questions configured' };
   }
 
-  // 2. Validate required questions
+  // 1. Validate required questions
   const answeredMap = new Map<string, string>();
   for (const item of payload.answers) {
     answeredMap.set(item.questionId, item.selectedOptionId);
@@ -77,7 +73,7 @@ export async function scoreAndRecordQuizSubmission(
     }
   }
 
-  // 3. Compute score and record selected answers
+  // 2. Compute score and record selected answers
   let earnedMarks = 0;
   let totalPossibleMarks = 0;
   const recordedAnswers: Array<{ question_id: string; selected_option_id: string; is_correct: boolean }> = [];
@@ -108,11 +104,17 @@ export async function scoreAndRecordQuizSubmission(
   const submissionId = `sub-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
   const submittedAt = new Date().toISOString();
 
-  // 4. Persist to Database (or mock store)
+  const participantData = {
+    club_name: payload.participant.club_name || null,
+    district_number: payload.participant.district_number || null,
+    position: payload.participant.position || null,
+    ...(payload.participant.data || {})
+  };
+
+  // 3. Persist to Database or mock store
   if (isSupabaseAdminConfigured()) {
     const supabase = getSupabaseAdminClient();
     if (supabase) {
-      // Insert submission
       const { data: subData, error: subError } = await supabase
         .from('submissions')
         .insert({
@@ -120,7 +122,7 @@ export async function scoreAndRecordQuizSubmission(
           quiz_id: quiz.id,
           participant_name: payload.participant.name,
           participant_email: payload.participant.email || null,
-          participant_data: payload.participant.data || null,
+          participant_data: participantData,
           score: earnedMarks,
           submitted_at: submittedAt
         })
@@ -128,7 +130,6 @@ export async function scoreAndRecordQuizSubmission(
         .single();
 
       if (!subError && subData) {
-        // Insert answers
         const answerRows = recordedAnswers.map(ans => ({
           submission_id: subData.id,
           question_id: ans.question_id,
@@ -144,13 +145,13 @@ export async function scoreAndRecordQuizSubmission(
       quiz_id: quiz.id,
       participant_name: payload.participant.name,
       participant_email: payload.participant.email || null,
-      participant_data: payload.participant.data || null,
+      participant_data: participantData,
       score: earnedMarks,
       submitted_at: submittedAt
     });
   }
 
-  // 5. Return sanitized result response
+  // 4. Return sanitized result response
   return {
     success: true,
     result: {
@@ -161,8 +162,8 @@ export async function scoreAndRecordQuizSubmission(
       passed,
       submittedAt,
       feedbackMessage: passed
-        ? 'Congratulations! You passed the quiz successfully.'
-        : 'Quiz completed. Keep practicing to improve your score!'
+        ? 'Congratulations! You completed the quiz with flying colors.'
+        : 'Quiz completed. Thank you for participating with the Rotaract Club of Mapusa!'
     }
   };
 }

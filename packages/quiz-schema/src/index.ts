@@ -20,7 +20,7 @@ export const themeSchema = z.object({
   surface_color: colorSchema,
   text_color: colorSchema,
   button_color: colorSchema,
-  border_radius: z.string().default('0.5rem'),
+  border_radius: z.string().default('0.75rem'),
   font_family: z.string().default('Inter, system-ui, sans-serif'),
   created_at: z.string().optional()
 });
@@ -32,7 +32,8 @@ export const quizSettingsSchema = z.object({
   passing_score_percentage: z.number().min(0).max(100).default(50),
   show_score_immediately: z.boolean().default(true),
   allow_review: z.boolean().default(true),
-  require_participant_email: z.boolean().default(false)
+  require_participant_email: z.boolean().default(false),
+  collect_club_details: z.boolean().default(false)
 });
 
 export const optionSchema = z.object({
@@ -79,7 +80,6 @@ export const quizSchema = z.object({
 
 /**
  * Quiz JSON Import Schema
- * Matches specified format in prompt
  */
 export const quizJsonImportThemeSchema = z.object({
   name: z.string().min(1, 'Theme name is required'),
@@ -131,11 +131,14 @@ export const quizJsonImportSchema = z.object({
 });
 
 /**
- * Public Quiz Submission Schema
+ * Public Quiz Submission Schema with Rotaract Custom Fields
  */
 export const participantSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
+  name: z.string().min(1, 'Full name is required').max(100),
   email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  club_name: z.string().optional().or(z.literal('')),
+  district_number: z.string().optional().or(z.literal('')),
+  position: z.string().optional().or(z.literal('')),
   data: z.record(z.any()).optional()
 });
 
