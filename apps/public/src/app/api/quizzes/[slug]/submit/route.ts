@@ -14,10 +14,11 @@ export async function POST(
     // 1. Validate payload with Zod
     const parsed = quizSubmissionSchema.safeParse(json);
     if (!parsed.success) {
+      const errorMsg = parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
       return NextResponse.json(
         {
           success: false,
-          error: 'Invalid submission data',
+          error: errorMsg || 'Invalid submission data',
           details: parsed.error.format()
         },
         { status: 400 }

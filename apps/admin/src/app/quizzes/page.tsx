@@ -6,6 +6,7 @@ import { JsonImporter } from '@/components/JsonImporter';
 import { getAllQuizzes } from '@quizmania/shared';
 import { PlusCircle, ExternalLink, FileEdit, Eye, FileUp } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function AllQuizzesPage({

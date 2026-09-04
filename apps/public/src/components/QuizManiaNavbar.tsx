@@ -23,7 +23,7 @@ export function QuizManiaNavbar() {
         </div>
 
         {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-7 text-sm font-semibold text-[#24141C]">
+        <nav className="hidden md:flex items-center gap-6 lg:gap-7 text-sm font-semibold text-[#24141C]">
           <Link href="/" className="hover:text-[#A50D52] transition-colors">
             Home
           </Link>
@@ -38,6 +38,9 @@ export function QuizManiaNavbar() {
           </Link>
           <Link href="/#rotaract" className="hover:text-[#A50D52] transition-colors">
             Rotaract Mapusa
+          </Link>
+          <Link href="/#creator" className="hover:text-[#A50D52] transition-colors">
+            Creator
           </Link>
         </nav>
 
@@ -103,6 +106,13 @@ export function QuizManiaNavbar() {
               className="px-4 py-3 rounded-xl text-sm font-semibold text-[#24141C] hover:bg-[#FAF8F9] hover:text-[#A50D52] transition-colors"
             >
               Rotaract Club of Mapusa
+            </Link>
+            <Link
+              href="/#creator"
+              onClick={() => setMobileMenuOpen(false)}
+              className="px-4 py-3 rounded-xl text-sm font-semibold text-[#24141C] hover:bg-[#FAF8F9] hover:text-[#A50D52] transition-colors"
+            >
+              About Atreya Kamat
             </Link>
           </div>
 

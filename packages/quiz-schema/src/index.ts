@@ -131,15 +131,15 @@ export const quizJsonImportSchema = z.object({
 });
 
 /**
- * Public Quiz Submission Schema with Rotaract Custom Fields
+ * Robust Participant Schema (Supports Rotaract event fields with fallback for empty strings / nulls)
  */
 export const participantSchema = z.object({
   name: z.string().min(1, 'Full name is required').max(100),
-  email: z.string().email('Invalid email address').optional().or(z.literal('')),
-  club_name: z.string().optional().or(z.literal('')),
-  district_number: z.string().optional().or(z.literal('')),
-  position: z.string().optional().or(z.literal('')),
-  data: z.record(z.any()).optional()
+  email: z.string().optional().nullable().or(z.literal('')),
+  club_name: z.string().optional().nullable().or(z.literal('')),
+  district_number: z.string().optional().nullable().or(z.literal('')),
+  position: z.string().optional().nullable().or(z.literal('')),
+  data: z.record(z.any()).optional().nullable()
 });
 
 export const selectedAnswerSchema = z.object({

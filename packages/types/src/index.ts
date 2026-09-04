@@ -129,11 +129,11 @@ export interface Answer {
 
 export interface ParticipantInfo {
   name: string;
-  email?: string;
-  club_name?: string;
-  district_number?: string;
-  position?: string;
-  data?: Record<string, any>;
+  email?: string | null;
+  club_name?: string | null;
+  district_number?: string | null;
+  position?: string | null;
+  data?: Record<string, any> | null;
 }
 
 export interface SelectedAnswer {

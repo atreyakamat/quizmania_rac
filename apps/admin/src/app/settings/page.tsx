@@ -3,6 +3,7 @@ import { AdminHeader } from '@/components/AdminHeader';
 import { isSupabaseConfigured, isSupabaseAdminConfigured } from '@quizmania/shared';
 import { ShieldCheck, Database, HardDrive, Terminal, CheckCircle2, AlertCircle } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default function SettingsPage() {

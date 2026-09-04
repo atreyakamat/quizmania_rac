@@ -3,6 +3,7 @@ import { AdminHeader } from '@/components/AdminHeader';
 import { getAllSubmissions, getAllQuizzes } from '@quizmania/shared';
 import { BarChart3, User, Mail, Award, Clock } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function ResultsPage() {

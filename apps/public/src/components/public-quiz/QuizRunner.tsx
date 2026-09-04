@@ -255,7 +255,7 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
                 <input
                   type="text"
                   required
-                  value={participant.name}
+                  value={participant.name || ''}
                   onChange={e => setParticipant(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="e.g. Rahul Naik"
                   className="w-full text-sm border border-black/15 rounded-2xl h-12 px-4 bg-white text-slate-900 focus:outline-none focus:ring-2"
@@ -271,7 +271,7 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
                 <input
                   type="email"
                   required
-                  value={participant.email}
+                  value={participant.email ?? ''}
                   onChange={e => setParticipant(prev => ({ ...prev, email: e.target.value }))}
                   placeholder="e.g. rahul@example.com"
                   className="w-full text-sm border border-black/15 rounded-2xl h-12 px-4 bg-white text-slate-900 focus:outline-none focus:ring-2"
@@ -287,7 +287,7 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
                 <input
                   type="text"
                   required
-                  value={participant.club_name}
+                  value={participant.club_name ?? ''}
                   onChange={e => setParticipant(prev => ({ ...prev, club_name: e.target.value }))}
                   placeholder="e.g. Rotaract Club of Mapusa"
                   className="w-full text-sm border border-black/15 rounded-2xl h-12 px-4 bg-white text-slate-900 focus:outline-none focus:ring-2"
@@ -303,7 +303,7 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
                 <input
                   type="text"
                   required
-                  value={participant.district_number}
+                  value={participant.district_number ?? ''}
                   onChange={e => setParticipant(prev => ({ ...prev, district_number: e.target.value }))}
                   placeholder="e.g. 3170"
                   className="w-full text-sm border border-black/15 rounded-2xl h-12 px-4 bg-white text-slate-900 focus:outline-none focus:ring-2"
@@ -318,7 +318,7 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
                 </label>
                 <input
                   type="text"
-                  value={participant.position}
+                  value={participant.position ?? ''}
                   onChange={e => setParticipant(prev => ({ ...prev, position: e.target.value }))}
                   placeholder="e.g. Member / President / Secretary"
                   className="w-full text-sm border border-black/15 rounded-2xl h-12 px-4 bg-white text-slate-900 focus:outline-none focus:ring-2"

@@ -6,6 +6,7 @@ import { QuizPreview } from '@/components/QuizPreview';
 import { getQuizById } from '@quizmania/shared';
 import { ArrowLeft, FileEdit } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function PreviewQuizPage({ params }: { params: { id: string } }) {

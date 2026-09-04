@@ -4,6 +4,7 @@ import { AdminHeader } from '@/components/AdminHeader';
 import { getAllThemes } from '@quizmania/shared';
 import { Palette, PlusCircle, Sparkles } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function ThemesPage() {

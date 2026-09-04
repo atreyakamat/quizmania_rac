@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getPublishedQuizBySlug } from '@quizmania/shared';
 import { QuizRunner } from '@/components/public-quiz/QuizRunner';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
