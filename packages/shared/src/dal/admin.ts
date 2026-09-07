@@ -14,7 +14,7 @@ import type {
   PaginatedResponsesResult,
   Answer
 } from '@quizmania/types';
-import { convertQuizJsonToQuiz } from '@quizmania/quiz-schema';
+import { convertQuizJsonToQuiz, getQuizAvailability, validateScheduleTimes } from '@quizmania/quiz-schema';
 import { getSupabaseAdminClient, isSupabaseDatabaseReady } from '../supabase';
 import { mockStore } from '../mock-data';
 
@@ -30,6 +30,28 @@ function ensureUuid(id?: string | null): string {
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
+}
+
+export function normalizeQuizRecord(quiz: any): Quiz {
+  if (!quiz) return quiz;
+  const start_at = quiz.start_at ?? quiz.settings?.start_at ?? null;
+  const end_at = quiz.end_at ?? quiz.settings?.end_at ?? null;
+  const schedule_enabled = quiz.settings?.schedule_enabled ?? Boolean(start_at || end_at);
+  const settings = {
+    ...(quiz.settings || {}),
+    schedule_enabled,
+    start_at,
+    end_at
+  };
+  const normalized: Quiz = {
+    ...quiz,
+    start_at,
+    end_at,
+    settings,
+    instructions: quiz.instructions ?? quiz.settings?.instructions ?? null,
+  };
+  normalized.availability = getQuizAvailability(normalized);
+  return normalized;
 }
 
 /**
@@ -76,7 +98,7 @@ export async function getAllQuizzes(filterStatus?: QuizStatus): Promise<Quiz[]> 
             quiz.sections.sort((a: any, b: any) => (a.section_order || 0) - (b.section_order || 0));
           }
         }
-        return data as Quiz[];
+        return (data as any[]).map(normalizeQuizRecord);
       }
     }
   }
@@ -85,7 +107,7 @@ export async function getAllQuizzes(filterStatus?: QuizStatus): Promise<Quiz[]> 
   if (filterStatus) {
     list = list.filter(q => q.status === filterStatus);
   }
-  return list;
+  return list.map(normalizeQuizRecord);
 }
 
 export async function getQuizById(id: string): Promise<Quiz | null> {
@@ -123,16 +145,78 @@ export async function getQuizById(id: string): Promise<Quiz | null> {
         if (data.sections && Array.isArray(data.sections)) {
           data.sections.sort((a: any, b: any) => (a.section_order || 0) - (b.section_order || 0));
         }
-        return data as Quiz;
+        return normalizeQuizRecord(data);
       }
       return null;
     }
   }
 
-  return mockStore.getQuizById(id) || null;
+  const mockQuiz = mockStore.getQuizById(id);
+  return mockQuiz ? normalizeQuizRecord(mockQuiz) : null;
+}
+
+export async function getQuizBySlug(slug: string): Promise<Quiz | null> {
+  const isLive = await isSupabaseDatabaseReady();
+  if (isLive) {
+    const supabase = getSupabaseAdminClient();
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('quizzes')
+        .select(`
+          *,
+          theme:themes(*),
+          sections:sections(*),
+          questions:questions(
+            *,
+            options:options(*)
+          )
+        `)
+        .eq('slug', slug)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(`Supabase getQuizBySlug error: ${error.message}`);
+      }
+
+      if (data) {
+        if (data.questions && Array.isArray(data.questions)) {
+          data.questions.sort((a: any, b: any) => (a.question_order || 0) - (b.question_order || 0));
+          for (const q of data.questions) {
+            if (q.options && Array.isArray(q.options)) {
+              q.options.sort((a: any, b: any) => (a.option_order || 0) - (b.option_order || 0));
+            }
+          }
+        }
+        if (data.sections && Array.isArray(data.sections)) {
+          data.sections.sort((a: any, b: any) => (a.section_order || 0) - (b.section_order || 0));
+        }
+        return normalizeQuizRecord(data);
+      }
+      return null;
+    }
+  }
+
+  const mockQuiz = mockStore.getQuizBySlug(slug);
+  return mockQuiz ? normalizeQuizRecord(mockQuiz) : null;
 }
 
 export async function saveQuiz(quiz: Partial<Quiz> & { title: string; slug: string }): Promise<Quiz> {
+  const rawStartAt = quiz.start_at ?? quiz.settings?.start_at ?? null;
+  const rawEndAt = quiz.end_at ?? quiz.settings?.end_at ?? null;
+  const scheduleEnabled = quiz.settings?.schedule_enabled ?? Boolean(rawStartAt || rawEndAt);
+
+  const { valid, error: schedError } = validateScheduleTimes(rawStartAt, rawEndAt);
+  if (!valid) {
+    throw new Error(schedError || 'End time must be later than start time.');
+  }
+
+  const settingsToSave = {
+    ...(quiz.settings || {}),
+    schedule_enabled: scheduleEnabled,
+    start_at: rawStartAt,
+    end_at: rawEndAt
+  };
+
   const isLive = await isSupabaseDatabaseReady();
   if (isLive) {
     const supabase = getSupabaseAdminClient();
@@ -140,20 +224,33 @@ export async function saveQuiz(quiz: Partial<Quiz> & { title: string; slug: stri
       const quizId = ensureUuid(quiz.id);
 
       // 1. Upsert Quiz record
-      const { error: quizError } = await supabase
+      const basePayload: Record<string, any> = {
+        id: quizId,
+        title: quiz.title,
+        slug: quiz.slug,
+        description: quiz.description ?? null,
+        cover_image: quiz.cover_image ?? null,
+        status: quiz.status || 'draft',
+        theme_id: quiz.theme_id && UUID_REGEX.test(quiz.theme_id) ? quiz.theme_id : null,
+        settings: settingsToSave,
+        instructions: (quiz as any).instructions ?? (quiz.settings as any)?.instructions ?? null,
+        updated_at: new Date().toISOString()
+      };
+
+      let { error: quizError } = await supabase
         .from('quizzes')
         .upsert({
-          id: quizId,
-          title: quiz.title,
-          slug: quiz.slug,
-          description: quiz.description ?? null,
-          cover_image: quiz.cover_image ?? null,
-          status: quiz.status || 'draft',
-          theme_id: quiz.theme_id && UUID_REGEX.test(quiz.theme_id) ? quiz.theme_id : null,
-          settings: quiz.settings || {},
-          instructions: (quiz as any).instructions ?? (quiz.settings as any)?.instructions ?? null,
-          updated_at: new Date().toISOString()
+          ...basePayload,
+          start_at: rawStartAt,
+          end_at: rawEndAt
         });
+
+      if (quizError && (quizError.message?.includes('start_at') || quizError.code === '42703')) {
+        const fallback = await supabase
+          .from('quizzes')
+          .upsert(basePayload);
+        quizError = fallback.error;
+      }
 
       if (quizError) {
         throw new Error(`Supabase saveQuiz error: ${quizError.message}`);
@@ -283,7 +380,13 @@ export async function saveQuiz(quiz: Partial<Quiz> & { title: string; slug: stri
     }
   }
 
-  return mockStore.saveQuiz(quiz as Quiz);
+  const mockSaved = mockStore.saveQuiz({
+    ...quiz,
+    start_at: rawStartAt,
+    end_at: rawEndAt,
+    settings: settingsToSave
+  } as Quiz);
+  return normalizeQuizRecord(mockSaved);
 }
 
 export async function setQuizStatus(id: string, status: QuizStatus): Promise<Quiz | null> {
@@ -301,11 +404,12 @@ export async function setQuizStatus(id: string, status: QuizStatus): Promise<Qui
       if (error) {
         throw new Error(`Supabase setQuizStatus error: ${error.message}`);
       }
-      return data as Quiz;
+      return normalizeQuizRecord(data);
     }
   }
 
-  return mockStore.updateQuizStatus(id, status) || null;
+  const updated = mockStore.updateQuizStatus(id, status);
+  return updated ? normalizeQuizRecord(updated) : null;
 }
 
 export const updateQuizStatus = setQuizStatus;
@@ -342,17 +446,28 @@ export async function getAllThemes(): Promise<Theme[]> {
   return mockStore.getThemes();
 }
 
+export async function getThemeById(id: string): Promise<Theme | null> {
+  const isLive = await isSupabaseDatabaseReady();
+  if (isLive) {
+    const supabase = getSupabaseAdminClient();
+    if (supabase) {
+      const { data, error } = await supabase.from('themes').select('*').eq('id', id).maybeSingle();
+      if (error) {
+        throw new Error(`Supabase getThemeById error: ${error.message}`);
+      }
+      return data as Theme | null;
+    }
+  }
+
+  return mockStore.getThemes().find(t => t.id === id) || null;
+}
+
 export async function saveTheme(theme: Theme): Promise<Theme> {
   const isLive = await isSupabaseDatabaseReady();
   if (isLive) {
     const supabase = getSupabaseAdminClient();
     if (supabase) {
-      const themeId = ensureUuid(theme.id);
-      const { data, error } = await supabase
-        .from('themes')
-        .upsert({ ...theme, id: themeId })
-        .select()
-        .single();
+      const { data, error } = await supabase.from('themes').upsert(theme).select().single();
       if (error) {
         throw new Error(`Supabase saveTheme error: ${error.message}`);
       }
@@ -430,6 +545,9 @@ export async function exportQuizToJson(quizId: string): Promise<QuizJsonImportFo
     slug: quiz.slug,
     description: quiz.description,
     status: quiz.status,
+    start_at: quiz.start_at ?? quiz.settings?.start_at,
+    end_at: quiz.end_at ?? quiz.settings?.end_at,
+    schedule_enabled: quiz.settings?.schedule_enabled,
     theme: quiz.theme ? {
       name: quiz.theme.name,
       primaryColor: quiz.theme.primary_color,

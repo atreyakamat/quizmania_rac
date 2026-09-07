@@ -177,7 +177,7 @@ export default async function AdminDashboardPage() {
                       <span className="text-xs text-slate-400 font-mono">/q/{quiz.slug}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <QuizStatusBadge status={quiz.status} />
+                      <QuizStatusBadge quiz={quiz} status={quiz.status} />
                     </td>
                     <td className="px-6 py-4 text-slate-600 text-xs">
                       {quiz.questions?.length || 0} Questions

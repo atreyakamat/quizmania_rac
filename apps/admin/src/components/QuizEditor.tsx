@@ -24,7 +24,9 @@ import {
   ChevronDown,
   ChevronUp,
   FileEdit,
-  ExternalLink
+  ExternalLink,
+  Calendar,
+  Clock
 } from 'lucide-react';
 
 const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -37,6 +39,21 @@ function makeUuid(): string {
     const r = Math.random() * 16 | 0;
     return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
   });
+}
+
+function toLocalDatetimeString(isoString?: string | null): string {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromLocalDatetimeString(localString?: string): string | null {
+  if (!localString) return null;
+  const d = new Date(localString);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
 }
 
 interface QuizEditorProps {
@@ -56,12 +73,17 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
     status: 'draft',
     theme_id: availableThemes[0]?.id || null,
     theme: availableThemes[0] || null,
+    start_at: null,
+    end_at: null,
     settings: {
       time_limit_minutes: 15,
       passing_score_percentage: 50,
       show_score_immediately: true,
       allow_review: true,
-      require_participant_email: false
+      require_participant_email: false,
+      schedule_enabled: false,
+      start_at: null,
+      end_at: null
     },
     questions: []
   });
@@ -69,6 +91,16 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const isScheduleEnabled = quiz.settings?.schedule_enabled ?? Boolean(quiz.start_at || quiz.end_at || quiz.settings?.start_at || quiz.settings?.end_at);
+  const currentStartAt = quiz.start_at ?? quiz.settings?.start_at ?? null;
+  const currentEndAt = quiz.end_at ?? quiz.settings?.end_at ?? null;
+  const isScheduleInvalid = Boolean(
+    isScheduleEnabled &&
+    currentStartAt &&
+    currentEndAt &&
+    new Date(currentEndAt).getTime() <= new Date(currentStartAt).getTime()
+  );
 
   const generateSlug = (text: string) => {
     return text
@@ -151,21 +183,30 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
         ? prev.id
         : (importedQuiz.id && UUID_REGEX.test(importedQuiz.id) ? importedQuiz.id : makeUuid());
 
+      const rawSched = importedQuiz.settings?.schedule_enabled ?? Boolean(importedQuiz.start_at || importedQuiz.end_at || importedQuiz.settings?.start_at || importedQuiz.settings?.end_at);
+      const rawStart = importedQuiz.start_at ?? importedQuiz.settings?.start_at ?? null;
+      const rawEnd = importedQuiz.end_at ?? importedQuiz.settings?.end_at ?? null;
+
       return {
         ...prev,
         id: activeQuizId,
         title: importedQuiz.title || prev.title,
-        slug: importedQuiz.slug || prev.slug,
+        slug: importedQuiz.slug || (importedQuiz.title ? generateSlug(importedQuiz.title) : prev.slug),
         description: importedQuiz.description !== undefined ? importedQuiz.description : prev.description,
         cover_image: importedQuiz.cover_image || prev.cover_image,
-        instructions: importedQuiz.instructions || prev.instructions,
-        theme_id: matchedThemeId,
         theme: matchedTheme,
+        theme_id: matchedThemeId,
+        instructions: importedQuiz.instructions ?? prev.instructions,
+        start_at: rawStart,
+        end_at: rawEnd,
         settings: {
           ...prev.settings,
-          ...importedQuiz.settings
+          ...importedQuiz.settings,
+          schedule_enabled: rawSched,
+          start_at: rawStart,
+          end_at: rawEnd
         },
-        sections: importedQuiz.sections && importedQuiz.sections.length > 0 ? importedQuiz.sections : prev.sections,
+        sections: importedQuiz.sections,
         questions: (importedQuiz.questions || []).map((q, idx) => {
           const qId = q.id && UUID_REGEX.test(q.id) ? q.id : makeUuid();
           return {
@@ -200,11 +241,38 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
       return;
     }
 
+    const scheduleEnabled = quiz.settings?.schedule_enabled ?? Boolean(quiz.start_at || quiz.end_at || quiz.settings?.start_at || quiz.settings?.end_at);
+    const startAt = quiz.start_at ?? quiz.settings?.start_at ?? null;
+    const endAt = quiz.end_at ?? quiz.settings?.end_at ?? null;
+
+    if (scheduleEnabled && startAt && endAt) {
+      const s = new Date(startAt).getTime();
+      const e = new Date(endAt).getTime();
+      if (!isNaN(s) && !isNaN(e) && e <= s) {
+        setFeedback({ type: 'error', message: 'End time must be later than start time.' });
+        return;
+      }
+    }
+
     setIsSaving(true);
     setFeedback(null);
 
     const targetStatus = overrideStatus || quiz.status;
-    const quizToSave = { ...quiz, status: targetStatus };
+    const finalStartAt = scheduleEnabled ? startAt : null;
+    const finalEndAt = scheduleEnabled ? endAt : null;
+
+    const quizToSave = {
+      ...quiz,
+      status: targetStatus,
+      start_at: finalStartAt,
+      end_at: finalEndAt,
+      settings: {
+        ...quiz.settings,
+        schedule_enabled: scheduleEnabled,
+        start_at: finalStartAt,
+        end_at: finalEndAt
+      }
+    };
 
     try {
       const res = await fetch('/api/quizzes', {
@@ -611,6 +679,102 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
             placeholder="e.g. Read each question carefully. You have 15 minutes to finish. Do not refresh the page during the quiz..."
             className="w-full text-xs border border-slate-200 rounded-lg p-2.5 bg-slate-50/50 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
           />
+        </div>
+
+        {/* Availability Window */}
+        <div className="pt-4 border-t border-slate-100 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                Availability Schedule
+              </h4>
+              <p className="text-[11px] text-slate-400">
+                Control when this quiz becomes accessible to participants and when it expires.
+              </p>
+            </div>
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors">
+              <input
+                type="checkbox"
+                checked={isScheduleEnabled}
+                onChange={e => {
+                  const enabled = e.target.checked;
+                  setQuiz(prev => ({
+                    ...prev,
+                    start_at: enabled ? (prev.start_at ?? prev.settings?.start_at) : null,
+                    end_at: enabled ? (prev.end_at ?? prev.settings?.end_at) : null,
+                    settings: {
+                      ...prev.settings,
+                      schedule_enabled: enabled,
+                      start_at: enabled ? (prev.settings?.start_at ?? prev.start_at) : null,
+                      end_at: enabled ? (prev.settings?.end_at ?? prev.end_at) : null
+                    }
+                  }));
+                }}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>Scheduled Quiz</span>
+            </label>
+          </div>
+
+          {isScheduleEnabled && (
+            <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Starts (Your Local Time)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={toLocalDatetimeString(quiz.start_at ?? quiz.settings?.start_at)}
+                    onChange={e => {
+                      const iso = fromLocalDatetimeString(e.target.value);
+                      setQuiz(prev => ({
+                        ...prev,
+                        start_at: iso,
+                        settings: { ...prev.settings, start_at: iso }
+                      }));
+                    }}
+                    className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Ends (Your Local Time)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={toLocalDatetimeString(quiz.end_at ?? quiz.settings?.end_at)}
+                    onChange={e => {
+                      const iso = fromLocalDatetimeString(e.target.value);
+                      setQuiz(prev => ({
+                        ...prev,
+                        end_at: iso,
+                        settings: { ...prev.settings, end_at: iso }
+                      }));
+                    }}
+                    className={`w-full text-xs border rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none font-mono ${
+                      isScheduleInvalid 
+                        ? 'border-rose-400 focus:border-rose-500 ring-1 ring-rose-300' 
+                        : 'border-slate-300 focus:border-blue-500'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {isScheduleInvalid && (
+                <div className="text-xs text-rose-600 font-semibold flex items-center gap-1.5 pt-1">
+                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span>End time must be later than start time.</span>
+                </div>
+              )}
+
+              <p className="text-[11px] text-slate-500">
+                Note: Individual participant attempt timers (e.g. {quiz.settings?.time_limit_minutes || 15}m limit) remain separate and run independently once an attempt begins within the availability window.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

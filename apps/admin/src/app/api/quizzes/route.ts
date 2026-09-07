@@ -42,9 +42,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, quiz: savedQuiz });
   } catch (err) {
     console.error('Error saving quiz:', err);
+    const msg = err instanceof Error ? err.message : 'Failed to save quiz';
+    const isValidationErr = msg.includes('End time must be later than start time') || msg.includes('Invalid date');
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : 'Failed to save quiz' },
-      { status: 500 }
+      { success: false, error: msg },
+      { status: isValidationErr ? 400 : 500 }
     );
   }
 }

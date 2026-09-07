@@ -83,7 +83,7 @@ export default async function AllQuizzesPage({
                           <span className="text-xs text-slate-400 font-mono">/q/{quiz.slug}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <QuizStatusBadge status={quiz.status} />
+                          <QuizStatusBadge quiz={quiz} status={quiz.status} />
                         </td>
                         <td className="px-6 py-4 text-xs text-slate-600">
                           {quiz.questions?.length || 0} Questions

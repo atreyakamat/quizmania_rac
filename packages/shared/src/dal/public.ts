@@ -1,4 +1,5 @@
 import type { PublicQuiz, PublicQuestion, PublicOption, Theme } from '@quizmania/types';
+import { getQuizAvailability } from '@quizmania/quiz-schema';
 import { getSupabasePublicClient, getSupabaseAdminClient, isSupabaseDatabaseReady } from '../supabase';
 import { mockStore } from '../mock-data';
 
@@ -119,7 +120,17 @@ export async function getPublishedQuizBySlug(slug: string): Promise<PublicQuiz |
             ? [...quizData.sections].sort((a: any, b: any) => (a.section_order || 0) - (b.section_order || 0))
             : [];
 
-          return {
+          const start_at = (quizData as any).start_at ?? quizData.settings?.start_at ?? null;
+          const end_at = (quizData as any).end_at ?? quizData.settings?.end_at ?? null;
+          const schedule_enabled = quizData.settings?.schedule_enabled ?? Boolean(start_at || end_at);
+          const settings = {
+            ...(quizData.settings || {}),
+            schedule_enabled,
+            start_at,
+            end_at
+          };
+
+          const publicQuiz: PublicQuiz = {
             id: quizData.id,
             title: quizData.title,
             slug: quizData.slug,
@@ -127,13 +138,17 @@ export async function getPublishedQuizBySlug(slug: string): Promise<PublicQuiz |
             cover_image: quizData.cover_image,
             status: 'published',
             theme: (Array.isArray(quizData.theme) ? quizData.theme[0] : quizData.theme) as Theme | null,
-            settings: quizData.settings || {},
+            settings,
             instructions: quizData.instructions ?? (quizData.settings as any)?.instructions ?? null,
+            start_at,
+            end_at,
             sections,
             questions,
             totalQuestions: questions.length,
             totalMarks
           };
+          publicQuiz.availability = getQuizAvailability(publicQuiz);
+          return publicQuiz;
         }
       }
       return null;
@@ -185,7 +200,17 @@ export async function getPublishedQuizBySlug(slug: string): Promise<PublicQuiz |
     ? [...mockQuiz.sections].sort((a, b) => (a.section_order || 0) - (b.section_order || 0))
     : [];
 
-  return {
+  const mockStartAt = mockQuiz.start_at ?? mockQuiz.settings?.start_at ?? null;
+  const mockEndAt = mockQuiz.end_at ?? mockQuiz.settings?.end_at ?? null;
+  const mockScheduleEnabled = mockQuiz.settings?.schedule_enabled ?? Boolean(mockStartAt || mockEndAt);
+  const mockSettings = {
+    ...(mockQuiz.settings || {}),
+    schedule_enabled: mockScheduleEnabled,
+    start_at: mockStartAt,
+    end_at: mockEndAt
+  };
+
+  const publicMockQuiz: PublicQuiz = {
     id: mockQuiz.id,
     title: mockQuiz.title,
     slug: mockQuiz.slug,
@@ -193,13 +218,17 @@ export async function getPublishedQuizBySlug(slug: string): Promise<PublicQuiz |
     cover_image: mockQuiz.cover_image,
     status: 'published',
     theme: mockQuiz.theme || null,
-    settings: mockQuiz.settings || {},
+    settings: mockSettings,
     instructions: mockQuiz.instructions ?? (mockQuiz.settings as any)?.instructions ?? null,
+    start_at: mockStartAt,
+    end_at: mockEndAt,
     sections,
     questions,
     totalQuestions: questions.length,
     totalMarks
   };
+  publicMockQuiz.availability = getQuizAvailability(publicMockQuiz);
+  return publicMockQuiz;
 }
 
 /**
@@ -212,6 +241,10 @@ export async function getPublishedQuizzesList(): Promise<Array<{
   description: string | null;
   cover_image: string | null;
   theme: any;
+  settings: any;
+  start_at?: string | null;
+  end_at?: string | null;
+  availability?: any;
   questionCount: number;
 }>> {
   const isLive = await isSupabaseDatabaseReady();
@@ -238,16 +271,34 @@ export async function getPublishedQuizzesList(): Promise<Array<{
       }
 
       if (data) {
-        return data.map(q => ({
-          id: q.id,
-          title: q.title,
-          slug: q.slug,
-          description: q.description,
-          cover_image: q.cover_image,
-          theme: q.theme,
-          settings: q.settings || {},
-          questionCount: (q.questions as any)?.[0]?.count ?? 0
-        }));
+        return data.map(q => {
+          const start_at = (q as any).start_at ?? q.settings?.start_at ?? null;
+          const end_at = (q as any).end_at ?? q.settings?.end_at ?? null;
+          const settings = {
+            ...(q.settings || {}),
+            start_at,
+            end_at
+          };
+          const availability = getQuizAvailability({
+            status: 'published',
+            start_at,
+            end_at,
+            settings
+          });
+          return {
+            id: q.id,
+            title: q.title,
+            slug: q.slug,
+            description: q.description,
+            cover_image: q.cover_image,
+            theme: q.theme,
+            settings,
+            start_at,
+            end_at,
+            availability,
+            questionCount: (q.questions as any)?.[0]?.count ?? 0
+          };
+        });
       }
     }
   }
@@ -258,16 +309,34 @@ export async function getPublishedQuizzesList(): Promise<Array<{
 
   return mockStore.getQuizzes()
     .filter(q => q.status === 'published')
-    .map(q => ({
-      id: q.id,
-      title: q.title,
-      slug: q.slug,
-      description: q.description,
-      cover_image: q.cover_image,
-      theme: q.theme,
-      settings: q.settings || {},
-      questionCount: q.questions?.length || 0
-    }));
+    .map(q => {
+      const start_at = q.start_at ?? q.settings?.start_at ?? null;
+      const end_at = q.end_at ?? q.settings?.end_at ?? null;
+      const settings = {
+        ...(q.settings || {}),
+        start_at,
+        end_at
+      };
+      const availability = getQuizAvailability({
+        status: 'published',
+        start_at,
+        end_at,
+        settings
+      });
+      return {
+        id: q.id,
+        title: q.title,
+        slug: q.slug,
+        description: q.description,
+        cover_image: q.cover_image,
+        theme: q.theme,
+        settings,
+        start_at,
+        end_at,
+        availability,
+        questionCount: q.questions?.length || 0
+      };
+    });
 }
 
 export interface QuizAttemptRecord {

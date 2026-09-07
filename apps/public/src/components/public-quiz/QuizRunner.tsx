@@ -7,7 +7,8 @@ import type {
   PublicQuestion, 
   ParticipantInfo, 
   SelectedAnswer, 
-  QuizSubmissionResult 
+  QuizSubmissionResult,
+  QuizAvailability
 } from '@quizmania/types';
 import { getThemeCssVariables } from '@quizmania/shared';
 import { 
@@ -25,7 +26,8 @@ import {
   FolderPlus,
   HelpCircle,
   Sparkles,
-  Timer
+  Timer,
+  Lock
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -69,6 +71,58 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
   );
   const [serverExpiresAt, setServerExpiresAt] = useState<string | null>(null);
   const [timerExpired, setTimerExpired] = useState(false);
+
+  // Availability & schedule state
+  const [currentAvailability, setCurrentAvailability] = useState<QuizAvailability>(
+    quiz.availability || { status: 'live', isAvailable: true }
+  );
+
+  const [upcomingSecondsRemaining, setUpcomingSecondsRemaining] = useState<number | null>(() => {
+    if (quiz.availability?.status === 'upcoming' && quiz.availability.startsAt) {
+      const diff = new Date(quiz.availability.startsAt).getTime() - Date.now();
+      return diff > 0 ? Math.ceil(diff / 1000) : 0;
+    }
+    return null;
+  });
+
+  // Check if upcoming countdown reached 0 and auto-fetch from server
+  useEffect(() => {
+    if (currentAvailability.status !== 'upcoming') return;
+
+    const timer = setInterval(() => {
+      if (!currentAvailability.startsAt) return;
+      const diff = Math.ceil((new Date(currentAvailability.startsAt).getTime() - Date.now()) / 1000);
+      if (diff <= 0) {
+        setUpcomingSecondsRemaining(0);
+        clearInterval(timer);
+        // Authoritative server fetch on transition
+        fetch(`/api/quizzes/${quiz.slug}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.quiz?.availability) {
+              setCurrentAvailability(data.quiz.availability);
+            }
+          })
+          .catch(e => console.error("Error fetching updated quiz status", e));
+      } else {
+        setUpcomingSecondsRemaining(diff);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [currentAvailability, quiz.slug]);
+
+  const formatUpcomingCountdown = (totalSecs: number) => {
+    const days = Math.floor(totalSecs / 86400);
+    const hours = Math.floor((totalSecs % 86400) / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+
+    if (days > 0) {
+      return `${days}d ${hours}h ${mins}m ${secs}s`;
+    }
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const themeVars = getThemeCssVariables(quiz.theme) as React.CSSProperties;
   const currentQuestion = processedQuestions[currentQuestionIndex];
@@ -137,19 +191,32 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setSessionToken(data.sessionToken);
-        setAttemptId(data.attemptId);
-        if (data.expiresAt) {
-           setServerExpiresAt(data.expiresAt);
-           const expires = new Date(data.expiresAt).getTime();
-           const now = Date.now();
-           const remaining = Math.max(0, Math.floor((expires - now) / 1000));
-           setSecondsRemaining(remaining);
-        }
+      if (res.status === 409) {
+        setParticipantError(data.message || 'This quiz has not started yet.');
+        return;
+      }
+      if (res.status === 410) {
+        setParticipantError(data.message || 'This quiz has expired.');
+        return;
+      }
+      if (!res.ok || !data.success) {
+        setParticipantError(data.error || 'Failed to start quiz attempt.');
+        return;
+      }
+
+      setSessionToken(data.sessionToken);
+      setAttemptId(data.attemptId);
+      if (data.expiresAt) {
+        setServerExpiresAt(data.expiresAt);
+        const expires = new Date(data.expiresAt).getTime();
+        const now = Date.now();
+        const remaining = Math.max(0, Math.floor((expires - now) / 1000));
+        setSecondsRemaining(remaining);
       }
     } catch (e) {
       console.error("Failed to start attempt", e);
+      setParticipantError("Network error starting attempt. Please try again.");
+      return;
     }
     
     if ((quiz.settings as any)?.instructions) {
@@ -380,6 +447,62 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
                 )}
               </div>
 
+              {/* Availability Status Banners */}
+              {currentAvailability.status === 'upcoming' && (
+                <div className="p-5 rounded-2xl border border-amber-300 bg-amber-50 text-amber-900 space-y-3 shadow-sm">
+                  <div className="flex items-center gap-2 font-bold text-sm text-amber-900">
+                    <Clock className="w-5 h-5 text-amber-600 animate-pulse" />
+                    <span>Quiz Coming Soon</span>
+                  </div>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    {currentAvailability.startsAt ? (
+                      <>
+                        This quiz is scheduled to start on <strong>{new Date(currentAvailability.startsAt).toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' })}</strong> (Your Local Time).
+                      </>
+                    ) : (
+                      <>This quiz has not started yet.</>
+                    )}
+                  </p>
+                  {upcomingSecondsRemaining !== null && upcomingSecondsRemaining > 0 && (
+                    <div className="flex items-center gap-3 pt-1">
+                      <span className="text-xs font-semibold text-amber-800">Starts in:</span>
+                      <span className="px-3.5 py-1.5 rounded-xl bg-amber-200/90 font-mono font-bold text-sm text-amber-950 border border-amber-300">
+                        {formatUpcomingCountdown(upcomingSecondsRemaining)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {currentAvailability.status === 'expired' && (
+                <div className="p-5 rounded-2xl border border-rose-200 bg-rose-50 text-rose-900 space-y-2 shadow-sm">
+                  <div className="flex items-center gap-2 font-bold text-sm text-rose-800">
+                    <AlertCircle className="w-5 h-5 text-rose-600" />
+                    <span>Quiz Expired</span>
+                  </div>
+                  <p className="text-xs text-rose-800 leading-relaxed">
+                    {currentAvailability.endsAt ? (
+                      <>This quiz ended on <strong>{new Date(currentAvailability.endsAt).toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' })}</strong>.</>
+                    ) : (
+                      <>This quiz has ended.</>
+                    )}
+                    {' '}Submissions are closed for this quiz.
+                  </p>
+                </div>
+              )}
+
+              {currentAvailability.status === 'live' && currentAvailability.endsAt && (
+                <div className="p-3.5 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 flex items-center justify-between text-xs shadow-sm">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Quiz is Live</span>
+                  </div>
+                  <span className="text-[11px] text-emerald-700 font-medium">
+                    Available until {new Date(currentAvailability.endsAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                  </span>
+                </div>
+              )}
+
               {/* Event Notice */}
               <div className="p-4 rounded-2xl border border-black/10 space-y-2 text-xs" style={{ backgroundColor: 'var(--quiz-background)' }}>
                 <div className="flex items-center gap-2 font-bold" style={{ color: 'var(--quiz-primary)' }}>
@@ -427,18 +550,38 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
                   <ArrowLeft className="w-3.5 h-3.5" /> Back to Quizzes
                 </Link>
 
-                <button
-                  type="button"
-                  onClick={() => setStep('participant')}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 px-8 rounded-2xl font-bold text-sm text-white shadow-md transition-all active:scale-95"
-                  style={{
-                    backgroundColor: 'var(--quiz-button)',
-                    borderRadius: 'var(--quiz-border-radius)'
-                  }}
-                >
-                  <span>Begin Quiz</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                {currentAvailability.status === 'upcoming' ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 px-8 rounded-2xl font-bold text-sm text-amber-800 bg-amber-100/90 border border-amber-200 cursor-not-allowed shadow-none"
+                  >
+                    <Lock className="w-4 h-4 text-amber-600" />
+                    <span>Quiz Coming Soon</span>
+                  </button>
+                ) : currentAvailability.status === 'expired' ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 px-8 rounded-2xl font-bold text-sm text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed shadow-none"
+                  >
+                    <Lock className="w-4 h-4 text-slate-400" />
+                    <span>Submissions Closed</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setStep('participant')}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 px-8 rounded-2xl font-bold text-sm text-white shadow-md transition-all active:scale-95"
+                    style={{
+                      backgroundColor: 'var(--quiz-button)',
+                      borderRadius: 'var(--quiz-border-radius)'
+                    }}
+                  >
+                    <span>Begin Quiz</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           </div>

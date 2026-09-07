@@ -11,8 +11,98 @@ import type {
   Question,
   Option,
   QuizSection,
-  QuizSettings
+  QuizSettings,
+  QuizAvailability,
+  QuizAvailabilityStatus
 } from '@quizmania/types';
+
+/**
+ * Validate schedule window consistency:
+ * If both start_at and end_at are provided, end_at MUST be later than start_at.
+ */
+export function validateScheduleTimes(start_at?: string | null, end_at?: string | null): { valid: boolean; error?: string } {
+  if (start_at && end_at) {
+    const startDate = new Date(start_at);
+    const endDate = new Date(end_at);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return { valid: false, error: 'Invalid date or time format.' };
+    }
+    if (endDate.getTime() <= startDate.getTime()) {
+      return { valid: false, error: 'End time must be later than start time.' };
+    }
+  }
+  return { valid: true };
+}
+
+/**
+ * Server-authoritative quiz availability determination.
+ * Evaluates reference time (UTC) against quiz published status and schedule window.
+ */
+export function getQuizAvailability(
+  quiz: {
+    status?: string | null;
+    start_at?: string | null;
+    end_at?: string | null;
+    settings?: {
+      schedule_enabled?: boolean;
+      start_at?: string | null;
+      end_at?: string | null;
+    } | null;
+  },
+  referenceTime: Date = new Date()
+): QuizAvailability {
+  if (!quiz || quiz.status !== 'published') {
+    return {
+      status: quiz?.status === 'draft' ? 'draft' : 'unpublished',
+      isAvailable: false,
+      message: 'This quiz is not published.'
+    };
+  }
+
+  const scheduleEnabled = quiz.settings?.schedule_enabled ?? Boolean(quiz.start_at || quiz.end_at || quiz.settings?.start_at || quiz.settings?.end_at);
+  const startAt = quiz.start_at ?? quiz.settings?.start_at ?? null;
+  const endAt = quiz.end_at ?? quiz.settings?.end_at ?? null;
+
+  if (!scheduleEnabled || (!startAt && !endAt)) {
+    return {
+      status: 'live',
+      isAvailable: true
+    };
+  }
+
+  const nowMs = referenceTime.getTime();
+
+  if (startAt) {
+    const startMs = new Date(startAt).getTime();
+    if (!isNaN(startMs) && nowMs < startMs) {
+      return {
+        status: 'upcoming',
+        isAvailable: false,
+        startsAt: startAt,
+        message: 'This quiz has not started yet.'
+      };
+    }
+  }
+
+  if (endAt) {
+    const endMs = new Date(endAt).getTime();
+    if (!isNaN(endMs) && nowMs >= endMs) {
+      return {
+        status: 'expired',
+        isAvailable: false,
+        endsAt: endAt,
+        message: 'This quiz has expired.'
+      };
+    }
+  }
+
+  return {
+    status: 'live',
+    isAvailable: true,
+    startsAt: startAt ?? undefined,
+    endsAt: endAt ?? undefined
+  };
+}
 
 // Slug regex: lowercase alphanumeric and hyphens
 export const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -93,9 +183,12 @@ export const quizSettingsSchema = z.object({
   allow_negative_total: z.boolean().default(false).optional(),
   features: quizFeatureFlagsSchema.partial().optional(),
   time_limit_seconds: z.number().int().positive().nullable().optional(),
-  auto_submit_on_timeout: z.boolean().default(true).optional()
-  , negative_marking: z.boolean().default(false).optional()
-
+  auto_submit_on_timeout: z.boolean().default(true).optional(),
+  negative_marking: z.boolean().default(false).optional(),
+  // Availability Schedule Window
+  schedule_enabled: z.boolean().default(false).optional(),
+  start_at: z.string().nullable().optional(),
+  end_at: z.string().nullable().optional()
 });
 
 export const quizSectionSchema = z.object({
@@ -192,8 +285,19 @@ export const quizSchema = z.object({
   cover_image: z.string().nullable().optional(),
   status: quizStatusSchema.default('draft'),
   theme_id: z.string().nullable().optional(),
+  instructions: z.string().nullable().optional(),
+  start_at: z.string().nullable().optional(),
+  end_at: z.string().nullable().optional(),
   settings: quizSettingsSchema.default({}),
   questions: z.array(questionSchema).optional()
+}).refine(data => {
+  const startAt = data.start_at ?? data.settings?.start_at;
+  const endAt = data.end_at ?? data.settings?.end_at;
+  const { valid } = validateScheduleTimes(startAt, endAt);
+  return valid;
+}, {
+  message: 'End time must be later than start time.',
+  path: ['end_at']
 });
 
 /**
@@ -350,6 +454,11 @@ export const quizJsonImportSchema = z.object({
   cover_image: z.string().nullable().optional(),
   settings: z.record(z.any()).optional(),
   instructions: z.string().nullable().optional(),
+  start_at: z.string().nullable().optional(),
+  startAt: z.string().nullable().optional(),
+  end_at: z.string().nullable().optional(),
+  endAt: z.string().nullable().optional(),
+  schedule_enabled: z.boolean().optional(),
   sections: z.array(z.union([quizSectionSchema, quizJsonImportSectionSchema])).optional(),
   features: quizFeatureFlagsSchema.partial().optional(),
   questions: z.array(quizJsonImportQuestionSchema).min(1, 'Quiz must have at least one question')
@@ -535,6 +644,14 @@ export function validateQuizJson(input: string | unknown): {
       });
     }
 
+    // 4. Availability Schedule Check
+    const rawStartAt = rawObj.start_at ?? rawObj.startAt ?? rawObj.settings?.start_at ?? rawObj.settings?.startAt;
+    const rawEndAt = rawObj.end_at ?? rawObj.endAt ?? rawObj.settings?.end_at ?? rawObj.settings?.endAt;
+    const schedCheck = validateScheduleTimes(rawStartAt, rawEndAt);
+    if (!schedCheck.valid && schedCheck.error) {
+      errors.push(schedCheck.error);
+    }
+
     if (errors.length > 0) {
       return {
         success: false,
@@ -642,6 +759,11 @@ export function convertQuizJsonToQuiz(
 
   // Parse Settings
   const rawSettings = (data.settings || {}) as Record<string, any>;
+  const rawScheduleEnabled = data.schedule_enabled ?? rawSettings.schedule_enabled ?? rawSettings.scheduleEnabled;
+  const rawStartAt = data.start_at ?? data.startAt ?? rawSettings.start_at ?? rawSettings.startAt ?? null;
+  const rawEndAt = data.end_at ?? data.endAt ?? rawSettings.end_at ?? rawSettings.endAt ?? null;
+  const scheduleEnabled = rawScheduleEnabled !== undefined ? Boolean(rawScheduleEnabled) : Boolean(rawStartAt || rawEndAt);
+
   const timeLimitMinutes = rawSettings.timeLimitMinutes ?? rawSettings.time_limit_minutes ?? (rawSettings.timer === false ? null : 15);
   const settings: QuizSettings = {
     time_limit_minutes: timeLimitMinutes,
@@ -655,6 +777,9 @@ export function convertQuizJsonToQuiz(
     shuffle_options: rawSettings.shuffleOptions ?? rawSettings.shuffle_options ?? false,
     allow_multiple_attempts: rawSettings.multipleAttempts ?? rawSettings.allow_multiple_attempts ?? false,
     instructions: data.instructions ?? rawSettings.instructions ?? null,
+    schedule_enabled: scheduleEnabled,
+    start_at: rawStartAt,
+    end_at: rawEndAt,
     features: {
       timer: rawSettings.timer ?? Boolean(timeLimitMinutes && timeLimitMinutes > 0),
       review: rawSettings.allowReview ?? rawSettings.allow_review ?? true,
@@ -757,9 +882,13 @@ export function convertQuizJsonToQuiz(
     theme_id: null,
     settings,
     instructions: data.instructions ?? settings.instructions ?? null,
+    start_at: rawStartAt,
+    end_at: rawEndAt,
     sections: sections.length > 0 ? sections : undefined,
     questions
   };
+
+  quiz.availability = getQuizAvailability(quiz);
 
   return {
     success: true,

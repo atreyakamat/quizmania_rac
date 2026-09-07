@@ -76,8 +76,21 @@ export interface QuizSettings {
   allow_negative_total?: boolean;
   features?: Partial<QuizFeatureFlags>;
   time_limit_seconds?: number | null;
-  auto_submit_on_timeout?: boolean;
   negative_marking?: boolean;
+  // Availability Schedule Window
+  schedule_enabled?: boolean;
+  start_at?: string | null;
+  end_at?: string | null;
+}
+
+export type QuizAvailabilityStatus = 'draft' | 'unpublished' | 'upcoming' | 'live' | 'expired';
+
+export interface QuizAvailability {
+  status: QuizAvailabilityStatus;
+  isAvailable: boolean; // true strictly when live and accepting new attempts
+  startsAt?: string | null;
+  endsAt?: string | null;
+  message?: string;
 }
 
 export interface QuizSection {
@@ -153,6 +166,9 @@ export interface Quiz {
   theme?: Theme | null;
   settings: QuizSettings;
   instructions?: string | null;
+  start_at?: string | null;
+  end_at?: string | null;
+  availability?: QuizAvailability;
   created_at?: string;
   updated_at?: string;
   questions?: Question[];
@@ -198,6 +214,9 @@ export interface PublicQuiz {
   theme: Theme | null;
   settings: QuizSettings;
   instructions?: string | null;
+  start_at?: string | null;
+  end_at?: string | null;
+  availability?: QuizAvailability;
   sections?: QuizSection[];
   questions: PublicQuestion[];
   totalQuestions: number;
@@ -384,6 +403,11 @@ export interface QuizJsonImportFormat {
   cover_image?: string | null;
   settings?: QuizSettings | Record<string, any>;
   instructions?: string | null;
+  schedule_enabled?: boolean;
+  start_at?: string | null;
+  end_at?: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
   sections?: (QuizSection | QuizJsonImportSection)[];
   features?: Partial<QuizFeatureFlags>;
   questions: QuizJsonImportQuestion[];

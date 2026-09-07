@@ -16,12 +16,14 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     };
   }
 
+  const isExpired = quiz.availability?.status === 'expired';
   const ogImage = quiz.cover_image || '/branding/quizmania.png';
   const desc = quiz.description || `Test your knowledge with ${quiz.title} on QuizMania by Rotaract Club of Mapusa (RI District 3170).`;
 
   return {
     title: quiz.title,
     description: desc,
+    robots: isExpired ? { index: false, follow: false } : undefined,
     alternates: {
       canonical: `https://quizmania.atreyakamat.dev/q/${quiz.slug}`
     },

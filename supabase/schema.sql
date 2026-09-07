@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS public.quizzes (
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'closed', 'archived')),
   theme_id UUID REFERENCES public.themes(id) ON DELETE SET NULL,
   instructions TEXT,
+  start_at TIMESTAMPTZ,
+  end_at TIMESTAMPTZ,
   settings JSONB NOT NULL DEFAULT '{
     "time_limit_minutes": 15,
     "passing_score_percentage": 50,
@@ -40,11 +42,13 @@ CREATE TABLE IF NOT EXISTS public.quizzes (
     "collect_club_details": true
   }'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_quizzes_schedule_window CHECK (start_at IS NULL OR end_at IS NULL OR end_at > start_at)
 );
 
 CREATE INDEX IF NOT EXISTS idx_quizzes_slug ON public.quizzes(slug);
 CREATE INDEX IF NOT EXISTS idx_quizzes_status ON public.quizzes(status);
+CREATE INDEX IF NOT EXISTS idx_quizzes_schedule_window ON public.quizzes(start_at, end_at);
 
 -- 3. SECTIONS TABLE
 CREATE TABLE IF NOT EXISTS public.sections (

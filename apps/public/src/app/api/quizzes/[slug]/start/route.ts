@@ -23,6 +23,35 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
       return NextResponse.json({ success: false, error: 'Quiz not found or not published' }, { status: 404 });
     }
 
+    const availability = quiz.availability;
+    if (availability) {
+      if (availability.status === 'upcoming') {
+        return NextResponse.json({
+          success: false,
+          status: 'upcoming',
+          message: availability.message || 'This quiz has not started yet.',
+          startsAt: availability.startsAt || quiz.start_at
+        }, { status: 409 });
+      }
+
+      if (availability.status === 'expired') {
+        return NextResponse.json({
+          success: false,
+          status: 'expired',
+          message: availability.message || 'This quiz has expired.',
+          endsAt: availability.endsAt || quiz.end_at
+        }, { status: 410 });
+      }
+
+      if (!availability.isAvailable) {
+        return NextResponse.json({
+          success: false,
+          status: availability.status,
+          message: availability.message || 'Quiz is currently unavailable.'
+        }, { status: 403 });
+      }
+    }
+
     const sessionToken = `attempt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const attemptId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-4000-8000-' + Math.random().toString(16).slice(2, 14).padStart(12, '0');
     const startedAt = new Date().toISOString();
