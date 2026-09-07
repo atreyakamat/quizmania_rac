@@ -227,7 +227,8 @@ export async function getPublishedQuizzesList(): Promise<Array<{
           description,
           cover_image,
           settings,
-          theme:themes(*)
+          theme:themes(*),
+          questions(count)
         `)
         .eq('status', 'published')
         .order('created_at', { ascending: false });
@@ -245,7 +246,7 @@ export async function getPublishedQuizzesList(): Promise<Array<{
           cover_image: q.cover_image,
           theme: q.theme,
           settings: q.settings || {},
-          questionCount: 0
+          questionCount: (q.questions as any)?.[0]?.count ?? 0
         }));
       }
     }
@@ -285,7 +286,7 @@ export interface QuizAttemptRecord {
 export async function createQuizAttempt(data: QuizAttemptRecord): Promise<QuizAttemptRecord> {
   const isLive = await isSupabaseDatabaseReady();
   if (isLive) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = getSupabaseAdminClient() || getSupabasePublicClient();
     if (supabase) {
       const { data: inserted, error } = await supabase
         .from('quiz_attempts')
@@ -324,7 +325,7 @@ export async function createQuizAttempt(data: QuizAttemptRecord): Promise<QuizAt
 export async function getQuizAttemptByToken(token: string): Promise<QuizAttemptRecord | null> {
   const isLive = await isSupabaseDatabaseReady();
   if (isLive) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = getSupabaseAdminClient() || getSupabasePublicClient();
     if (supabase) {
       const { data, error } = await supabase
         .from('quiz_attempts')
@@ -353,7 +354,7 @@ export async function updateQuizAttemptStatus(
 ): Promise<void> {
   const isLive = await isSupabaseDatabaseReady();
   if (isLive) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = getSupabaseAdminClient() || getSupabasePublicClient();
     if (supabase) {
       const updatePayload: Record<string, any> = { status };
       if (submittedAt !== undefined) {

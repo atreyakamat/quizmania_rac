@@ -10,9 +10,17 @@ export async function GET(
   try {
     const quiz = await getPublishedQuizBySlug(params.slug);
     if (!quiz) {
-      return NextResponse.json({ success: false, error: 'Quiz not found or not published' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: 'Quiz not found or not published' },
+        {
+          status: 404,
+          headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' }
+        }
+      );
     }
-    return NextResponse.json({ success: true, quiz });
+    const response = NextResponse.json({ success: true, quiz });
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    return response;
   } catch (err) {
     return NextResponse.json(
       { success: false, error: err instanceof Error ? err.message : 'Server error fetching quiz' },

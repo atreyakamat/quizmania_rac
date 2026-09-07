@@ -4,6 +4,7 @@ import { QuizCard } from '@/components/QuizCard';
 import { getPublishedQuizzesList } from '@quizmania/shared';
 import { Sparkles, ArrowLeft, HelpCircle } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function QuizzesDirectoryPage() {

@@ -3,14 +3,33 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 let publicClientInstance: SupabaseClient | null = null;
 let adminClientInstance: SupabaseClient | null = null;
 
+const DEFAULT_SUPABASE_URL = 'https://eaqmwvxggnyprletpklr.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhcW13dnhnZ255cHJsZXRwa2xyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1MDgyOTgsImV4cCI6MjEwNDA4NDI5OH0._2JAhfvsSg1WkWQmueSFjul0NBeDqxpF3h--DFyo2Uc';
+
+export function getSupabaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  if (envUrl && !envUrl.includes('placeholder') && !envUrl.includes('your-supabase-url')) {
+    return envUrl;
+  }
+  return DEFAULT_SUPABASE_URL;
+}
+
+export function getSupabaseAnonKey(): string {
+  const envKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  if (envKey && !envKey.includes('placeholder') && !envKey.includes('your-supabase-key')) {
+    return envKey;
+  }
+  return DEFAULT_SUPABASE_ANON_KEY;
+}
+
 export function isSupabaseConfigured(): boolean {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  return Boolean(url && anonKey && !url.includes('placeholder') && !url.includes('your-supabase-url'));
+  const url = getSupabaseUrl();
+  const anonKey = getSupabaseAnonKey();
+  return Boolean(url && anonKey && !url.includes('placeholder'));
 }
 
 export function isSupabaseAdminConfigured(): boolean {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = getSupabaseUrl();
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   return Boolean(url && serviceKey && !url.includes('placeholder') && !serviceKey.includes('placeholder'));
 }
@@ -18,16 +37,25 @@ export function isSupabaseAdminConfigured(): boolean {
 /**
  * Public Supabase client using Anon Key.
  * Subject to Row-Level Security (RLS).
+ * Configured with cache: 'no-store' to guarantee fresh data on every query.
  */
 export function getSupabasePublicClient(): SupabaseClient | null {
   if (!isSupabaseConfigured()) {
     return null;
   }
   if (!publicClientInstance) {
-    const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)!;
-    const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY)!;
+    const url = getSupabaseUrl();
+    const anonKey = getSupabaseAnonKey();
     publicClientInstance = createClient(url, anonKey, {
-      auth: { persistSession: false }
+      auth: { persistSession: false },
+      global: {
+        fetch: (fetchUrl, options = {}) => {
+          return fetch(fetchUrl, {
+            ...options,
+            cache: 'no-store'
+          });
+        }
+      }
     });
   }
   return publicClientInstance;
@@ -47,10 +75,18 @@ export function getSupabaseAdminClient(): SupabaseClient | null {
     return null;
   }
   if (!adminClientInstance) {
-    const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)!;
+    const url = getSupabaseUrl();
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     adminClientInstance = createClient(url, serviceRoleKey, {
-      auth: { persistSession: false }
+      auth: { persistSession: false },
+      global: {
+        fetch: (fetchUrl, options = {}) => {
+          return fetch(fetchUrl, {
+            ...options,
+            cache: 'no-store'
+          });
+        }
+      }
     });
   }
   return adminClientInstance;

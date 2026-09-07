@@ -9,7 +9,7 @@ import type {
   Question,
   QuestionType
 } from '@quizmania/types';
-import { getSupabaseAdminClient, isSupabaseAdminConfigured, isSupabaseDatabaseReady } from './supabase';
+import { getSupabaseAdminClient, getSupabasePublicClient, isSupabaseAdminConfigured, isSupabaseDatabaseReady } from './supabase';
 import { mockStore } from './mock-data';
 
 interface ScoreContext {
@@ -265,7 +265,7 @@ export async function scoreAndRecordQuizSubmission(
   // Idempotency / duplicate submission check
   if (payload.attemptId) {
     if (isLive) {
-      const supabase = getSupabaseAdminClient();
+      const supabase = getSupabaseAdminClient() || getSupabasePublicClient();
       if (supabase) {
         const { data: existingSub } = await supabase
           .from('submissions')
@@ -353,7 +353,7 @@ export async function scoreAndRecordQuizSubmission(
   };
 
   if (isLive) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = getSupabaseAdminClient() || getSupabasePublicClient();
     if (!supabase) {
       return { success: false, error: 'Database service client not available' };
     }

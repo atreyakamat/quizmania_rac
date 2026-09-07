@@ -9,6 +9,7 @@ import { CreatorSection } from '@/components/CreatorSection';
 import { getPublishedQuizzesList } from '@quizmania/shared';
 import { ArrowRight, Sparkles, HelpCircle, PlusCircle, ExternalLink } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function QuizManiaLandingPage() {
