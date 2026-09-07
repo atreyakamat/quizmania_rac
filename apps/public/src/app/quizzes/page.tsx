@@ -1,11 +1,32 @@
 import React from 'react';
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { QuizCard } from '@/components/QuizCard';
 import { getPublishedQuizzesList } from '@quizmania/shared';
 import { Sparkles, ArrowLeft, HelpCircle } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+export const metadata: Metadata = {
+  title: 'Explore Live Competitions & Quizzes',
+  description: 'Browse all active, interactive quizzes hosted by the Rotaract Club of Mapusa (RI District 3170). Challenge yourself, test your knowledge, and compete with peers across Goa.',
+  alternates: {
+    canonical: 'https://quizmania.atreyakamat.dev/quizzes'
+  },
+  openGraph: {
+    title: 'Explore Live Competitions & Quizzes | QuizMania — Rotaract Club of Mapusa',
+    description: 'Browse all active quizzes hosted by Rotaract Club of Mapusa (RI District 3170). Challenge yourself and compete with peers across Goa.',
+    url: 'https://quizmania.atreyakamat.dev/quizzes',
+    images: ['/branding/quizmania-og.png']
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Explore Live Competitions & Quizzes | QuizMania',
+    description: 'Browse active quizzes hosted by Rotaract Club of Mapusa. Challenge yourself and compete with peers.',
+    images: ['/branding/quizmania-og.png']
+  }
+};
 
 export default async function QuizzesDirectoryPage() {
   const publishedQuizzes = await getPublishedQuizzesList();

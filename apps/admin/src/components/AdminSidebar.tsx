@@ -21,8 +21,14 @@ export function AdminSidebar() {
     <aside className="w-64 bg-[#180A12] text-slate-200 min-h-screen flex flex-col border-r border-[#301322] flex-shrink-0">
       {/* Brand Header */}
       <div className="p-5 border-b border-[#301322] flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#A50D52] to-[#6E123D] flex items-center justify-center text-white font-extrabold text-lg shadow-lg shadow-[#A50D52]/30 border border-[#D83B70]/30">
-          Q
+        <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-white/10 p-1 border border-[#D83B70]/30 shadow-lg shadow-[#A50D52]/30 flex-shrink-0">
+          <Image
+            src="/branding/quizmania-logo.png"
+            alt="QuizMania Logo"
+            width={40}
+            height={40}
+            className="w-full h-full object-contain"
+          />
         </div>
         <div>
           <div className="flex items-center gap-1.5">

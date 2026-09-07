@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight, Sparkles, Trophy, CheckCircle2, ShieldCheck, Heart, Users } from 'lucide-react';
 
 export function QuizHero() {
@@ -20,8 +21,16 @@ export function QuizHero() {
           <div className="lg:col-span-7 space-y-6 sm:space-y-8 text-center lg:text-left">
             {/* Badges */}
             <div className="inline-flex flex-wrap items-center justify-center lg:justify-start gap-2">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 backdrop-blur-md border border-[#F0E1E8] shadow-xs">
-                <span className="w-2 h-2 rounded-full bg-[#A50D52] animate-ping" />
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/95 backdrop-blur-md border border-[#F0E1E8] shadow-xs">
+                <div className="relative w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
+                  <Image
+                    src="/branding/quizmania-logo.png"
+                    alt="QuizMania Official"
+                    width={16}
+                    height={16}
+                    className="object-contain"
+                  />
+                </div>
                 <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[#6E123D]">
                   Rotaract Club of Mapusa • RI Dist. 3170
                 </span>
@@ -89,8 +98,14 @@ export function QuizHero() {
               {/* Header inside mockup */}
               <div className="flex items-center justify-between border-b border-[#F0E1E8] pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-[#A50D52] to-[#6E123D] text-white font-black text-sm flex items-center justify-center shadow-xs">
-                    Q
+                  <div className="relative w-10 h-10 rounded-2xl overflow-hidden bg-white p-1 border border-[#D83B70]/30 shadow-xs flex-shrink-0">
+                    <Image
+                      src="/branding/quizmania-logo.png"
+                      alt="QuizMania Sample"
+                      width={40}
+                      height={40}
+                      className="w-full h-full object-contain"
+                    />
                   </div>
                   <div>
                     <span className="text-xs font-bold text-[#24141C] block">Rotaract Youth Challenge</span>

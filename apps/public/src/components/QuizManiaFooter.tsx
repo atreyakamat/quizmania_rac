@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Heart, MapPin, Award, ArrowUpRight } from 'lucide-react';
 
 export function QuizManiaFooter() {
@@ -10,8 +11,14 @@ export function QuizManiaFooter() {
           {/* Brand Col */}
           <div className="md:col-span-6 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#A50D52] to-[#6E123D] flex items-center justify-center text-white font-extrabold text-lg border border-[#D83B70]/30 shadow-md">
-                Q
+              <div className="relative w-11 h-11 rounded-2xl overflow-hidden bg-white/10 p-1 border border-[#D83B70]/30 shadow-md flex-shrink-0">
+                <Image
+                  src="/branding/quizmania-logo.png"
+                  alt="QuizMania Official Logo"
+                  width={44}
+                  height={44}
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div>
                 <span className="text-xl font-black tracking-tight text-white block">

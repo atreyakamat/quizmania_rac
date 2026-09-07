@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { HelpCircle, Award, ArrowRight, Clock, Sparkles } from 'lucide-react';
 
 interface QuizCardProps {
@@ -36,12 +37,22 @@ export function QuizCard({ quiz }: QuizCardProps) {
           <img
             src={quiz.cover_image}
             alt={quiz.title}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-[#A50D52]/40 bg-gradient-to-br from-[#FAF8F9] to-[#F3D6E1]/30">
-            <Sparkles className="w-12 h-12 mb-2 stroke-1" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-[#6E123D]/60">
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#FAF8F9] via-[#F3D6E1]/20 to-[#A50D52]/5 p-6">
+            <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-white/90 p-1.5 border border-[#D83B70]/20 shadow-xs mb-2 group-hover:scale-110 transition-transform">
+              <Image
+                src="/branding/quizmania-logo.png"
+                alt="QuizMania Official"
+                width={56}
+                height={56}
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#6E123D]/70">
               QuizMania Event
             </span>
           </div>

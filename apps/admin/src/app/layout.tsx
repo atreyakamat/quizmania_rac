@@ -5,6 +5,10 @@ import { AdminShell } from '@/components/AdminShell';
 export const metadata = {
   title: 'QuizMania Admin Studio - Rotaract Club of Mapusa',
   description: 'Private administration panel for QuizMania',
+  icons: {
+    icon: '/branding/favicon-32x32.png',
+    shortcut: '/favicon.ico'
+  }
 };
 
 export default function RootLayout({

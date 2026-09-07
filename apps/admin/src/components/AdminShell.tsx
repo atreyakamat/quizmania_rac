@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { AdminSidebar } from './AdminSidebar';
 import { Menu, X, Globe2, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
@@ -13,8 +14,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       {/* Mobile Top Bar */}
       <header className="lg:hidden bg-[#180A12] text-white px-4 py-3 flex items-center justify-between sticky top-0 z-40 border-b border-[#301322]">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#A50D52] to-[#6E123D] flex items-center justify-center text-white font-extrabold text-sm border border-[#D83B70]/30">
-            Q
+          <div className="relative w-8 h-8 rounded-lg overflow-hidden bg-white/10 p-0.5 border border-[#D83B70]/30 flex-shrink-0">
+            <Image
+              src="/branding/quizmania-logo.png"
+              alt="QuizMania Logo"
+              width={32}
+              height={32}
+              className="w-full h-full object-contain"
+            />
           </div>
           <div>
             <span className="font-bold text-sm tracking-tight text-white block">QUIZMANIA</span>
