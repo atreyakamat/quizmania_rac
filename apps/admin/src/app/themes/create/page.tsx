@@ -4,15 +4,27 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminHeader } from '@/components/AdminHeader';
 import { QuizThemeEditor } from '@/components/QuizThemeEditor';
-import { saveTheme } from '@quizmania/shared';
 import type { Theme } from '@quizmania/types';
 
 export default function CreateThemePage() {
   const router = useRouter();
 
   const handleSaveTheme = async (theme: Theme) => {
-    await saveTheme(theme);
-    router.push('/themes');
+    try {
+      const res = await fetch('/api/themes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(theme)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to save theme');
+      }
+      router.push('/themes');
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Save theme failed');
+    }
   };
 
   return (

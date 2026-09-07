@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { AdminHeader } from '@/components/AdminHeader';
 import { QuizStatusBadge } from '@/components/QuizStatusBadge';
 import { JsonImporter } from '@/components/JsonImporter';
+import { DeleteQuizButton } from '@/components/DeleteQuizButton';
 import { getAllQuizzes } from '@quizmania/shared';
 import { PlusCircle, ExternalLink, FileEdit, Eye, FileUp } from 'lucide-react';
 
@@ -125,6 +126,7 @@ export default async function AllQuizzesPage({
                               <ExternalLink className="w-3 h-3" />
                             </a>
                           )}
+                          <DeleteQuizButton quizId={quiz.id} quizTitle={quiz.title} />
                         </td>
                       </tr>
                     ))

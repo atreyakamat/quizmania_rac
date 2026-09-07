@@ -77,6 +77,17 @@ export function QuizPreview({ quiz, onClose }: QuizPreviewProps) {
                 className="p-6 rounded-2xl shadow-sm border border-black/5"
                 style={{ backgroundColor: 'var(--quiz-surface)', borderRadius: 'var(--quiz-border-radius)' }}
               >
+                {currentQuestion.section_title && (
+                  <div className="mb-4 pb-2 border-b border-black/10">
+                    <span className="text-xs font-bold uppercase tracking-wider opacity-70">
+                      Section
+                    </span>
+                    <h2 className="text-xl font-bold mt-1" style={{ color: 'var(--quiz-primary)' }}>
+                      {currentQuestion.section_title}
+                    </h2>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full" style={{ backgroundColor: 'var(--quiz-secondary)', color: 'var(--quiz-text)' }}>
                     {currentQuestion.marks} Marks
@@ -98,48 +109,101 @@ export function QuizPreview({ quiz, onClose }: QuizPreviewProps) {
                   </div>
                 )}
 
-                {/* Options */}
+                {/* Options / Inputs */}
                 <div className="space-y-2.5">
-                  {(currentQuestion.options || []).map((option, idx) => {
-                    const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
-                    const isSelected = selectedAnswers[currentQuestion.id] === option.id;
+                  {(currentQuestion.question_type === 'short_answer' || currentQuestion.question_type === 'text_answer') ? (
+                    <input
+                      type="text"
+                      placeholder="Type your answer here..."
+                      value={selectedAnswers[currentQuestion.id] || ''}
+                      onChange={e => setSelectedAnswers(prev => ({ ...prev, [currentQuestion.id]: e.target.value }))}
+                      className="w-full p-4 rounded-xl border text-sm focus:outline-none focus:ring-2"
+                      style={{
+                        backgroundColor: 'var(--quiz-surface)',
+                        borderColor: 'rgba(0,0,0,0.1)',
+                        color: 'var(--quiz-text)',
+                        borderRadius: 'var(--quiz-border-radius)'
+                      }}
+                    />
+                  ) : currentQuestion.question_type === 'paragraph' ? (
+                    <textarea
+                      rows={4}
+                      placeholder="Type your detailed answer here..."
+                      value={selectedAnswers[currentQuestion.id] || ''}
+                      onChange={e => setSelectedAnswers(prev => ({ ...prev, [currentQuestion.id]: e.target.value }))}
+                      className="w-full p-4 rounded-xl border text-sm focus:outline-none focus:ring-2"
+                      style={{
+                        backgroundColor: 'var(--quiz-surface)',
+                        borderColor: 'rgba(0,0,0,0.1)',
+                        color: 'var(--quiz-text)',
+                        borderRadius: 'var(--quiz-border-radius)'
+                      }}
+                    />
+                  ) : (
+                    (currentQuestion.options || []).map((option, idx) => {
+                      const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+                      
+                      const isMultiple = currentQuestion.question_type === 'multiple_choice';
+                      const currentSelected = selectedAnswers[currentQuestion.id] || '';
+                      const selectedArray = currentSelected ? currentSelected.split(',') : [];
+                      const isSelected = isMultiple ? selectedArray.includes(option.id) : currentSelected === option.id;
 
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => handleSelectOption(currentQuestion.id, option.id)}
-                        className={`w-full text-left p-3.5 rounded-xl border transition-all flex items-center gap-3.5 ${
-                          isSelected ? 'shadow-sm ring-2' : 'hover:border-black/30'
-                        }`}
-                        style={{
-                          backgroundColor: 'var(--quiz-surface)',
-                          borderColor: isSelected ? 'var(--quiz-primary)' : 'rgba(0,0,0,0.1)',
-                          borderRadius: 'var(--quiz-border-radius)',
-                          outlineColor: 'var(--quiz-primary)'
-                        }}
-                      >
-                        <div
-                          className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 transition-colors"
+                      const handleOptionClick = () => {
+                        if (isMultiple) {
+                          if (isSelected) {
+                            setSelectedAnswers(prev => ({ ...prev, [currentQuestion.id]: selectedArray.filter(id => id !== option.id).join(',') }));
+                          } else {
+                            setSelectedAnswers(prev => ({ ...prev, [currentQuestion.id]: [...selectedArray, option.id].join(',') }));
+                          }
+                        } else {
+                          handleSelectOption(currentQuestion.id, option.id);
+                        }
+                      };
+
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={handleOptionClick}
+                          className={`w-full text-left p-3.5 rounded-xl border transition-all flex items-center gap-3.5 ${
+                            isSelected ? 'shadow-sm ring-2' : 'hover:border-black/30'
+                          }`}
                           style={{
-                            backgroundColor: isSelected ? 'var(--quiz-button)' : 'rgba(0,0,0,0.06)',
-                            color: isSelected ? '#FFFFFF' : 'var(--quiz-text)'
+                            backgroundColor: 'var(--quiz-surface)',
+                            borderColor: isSelected ? 'var(--quiz-primary)' : 'rgba(0,0,0,0.1)',
+                            borderRadius: 'var(--quiz-border-radius)',
+                            outlineColor: 'var(--quiz-primary)'
                           }}
                         >
-                          {letters[idx] || idx + 1}
-                        </div>
-                        <span className="text-sm font-medium flex-1" style={{ color: 'var(--quiz-text)' }}>
-                          {option.option_text}
-                        </span>
-                        {/* In Admin preview, show a subtle correct badge */}
-                        {option.is_correct && (
-                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
-                            Correct Answer
+                          <div
+                            className={`w-7 h-7 flex items-center justify-center font-bold text-xs flex-shrink-0 transition-colors ${
+                              isMultiple ? 'rounded-md' : 'rounded-full'
+                            }`}
+                            style={{
+                              backgroundColor: isSelected ? 'var(--quiz-button)' : 'rgba(0,0,0,0.06)',
+                              color: isSelected ? '#FFFFFF' : 'var(--quiz-text)'
+                            }}
+                          >
+                            {letters[idx] || idx + 1}
+                          </div>
+                          <span className="text-sm font-medium flex-1" style={{ color: 'var(--quiz-text)' }}>
+                            {option.option_text}
                           </span>
-                        )}
-                      </button>
-                    );
-                  })}
+                          
+                          {option.option_image && (
+                            <img src={option.option_image} alt="Option" className="h-10 rounded object-cover ml-2" />
+                          )}
+
+                          {/* In Admin preview, show a subtle correct badge */}
+                          {option.is_correct && (
+                            <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full whitespace-nowrap ml-2">
+                              Correct Answer
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>

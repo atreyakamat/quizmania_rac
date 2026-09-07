@@ -19,8 +19,13 @@ export async function uploadImage(
   fileName: string
 ): Promise<{ success: boolean; url?: string; path?: string; error?: string }> {
   if (!isSupabaseConfigured()) {
+    if (process.env.NODE_ENV === 'production') {
+      return { success: false, error: 'Storage backend is not configured in production environment.' };
+    }
     // Return a dummy object URL or placeholder for local dev without live bucket
-    const fakeUrl = URL.createObjectURL(file);
+    const fakeUrl = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+      ? URL.createObjectURL(file)
+      : `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23ddd" width="100" height="100"/></svg>`;
     return {
       success: true,
       url: fakeUrl,

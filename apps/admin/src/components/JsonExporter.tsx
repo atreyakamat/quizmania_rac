@@ -1,17 +1,25 @@
 'use client';
 
 import React, { useState } from 'react';
-import { exportQuizToJson } from '@quizmania/shared';
 import { Download, Check, Copy } from 'lucide-react';
 
 export function JsonExporter({ quizId, quizSlug }: { quizId: string; quizSlug: string }) {
   const [copied, setCopied] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
+  const fetchExportData = async () => {
+    const res = await fetch(`/api/quizzes/${quizId}/export`);
+    const result = await res.json();
+    if (!res.ok || !result.success) {
+      throw new Error(result.error || 'Export failed');
+    }
+    return result.data;
+  };
+
   const handleDownload = async () => {
     setIsExporting(true);
     try {
-      const data = await exportQuizToJson(quizId);
+      const data = await fetchExportData();
       if (!data) return;
 
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -23,17 +31,23 @@ export function JsonExporter({ quizId, quizSlug }: { quizId: string; quizSlug: s
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Export failed');
     } finally {
       setIsExporting(false);
     }
   };
 
   const handleCopy = async () => {
-    const data = await exportQuizToJson(quizId);
-    if (!data) return;
-    await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      const data = await fetchExportData();
+      if (!data) return;
+      await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to copy');
+    }
   };
 
   return (

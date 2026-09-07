@@ -1,0 +1,39 @@
+import { NextResponse } from 'next/server';
+import { setQuizStatus } from '@quizmania/shared';
+import type { QuizStatus } from '@quizmania/types';
+
+export const dynamic = 'force-dynamic';
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+    const body = await request.json();
+    const { status } = body as { status: QuizStatus };
+
+    if (!status || !['draft', 'published', 'archived'].includes(status)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid or missing status. Must be draft, published, or archived.' },
+        { status: 400 }
+      );
+    }
+
+    const updatedQuiz = await setQuizStatus(id, status);
+    if (!updatedQuiz) {
+      return NextResponse.json(
+        { success: false, error: 'Quiz not found or could not update status' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, quiz: updatedQuiz });
+  } catch (err) {
+    console.error('Error setting quiz status:', err);
+    return NextResponse.json(
+      { success: false, error: err instanceof Error ? err.message : 'Failed to update quiz status' },
+      { status: 500 }
+    );
+  }
+}

@@ -1,137 +1,241 @@
 # QuizMania
 
-### A Reusable Quiz Management Platform by Rotaract Club of Mapusa
-*Rotary International District 3170*
+### A Flexible Quiz Creation & Participation Platform by Rotaract Club of Mapusa
+*Rotary International District 3170 | Built by Atreya Kamat*
 
-**QuizMania** is a modern, event-ready, reusable quiz management platform designed for conducting engaging interactive competitions, fellowship challenges, and educational events.
-
----
-
-## 🎨 Visual Identity & Brand Design Tokens
-
-The visual design is inspired by the **Rotaract Club of Mapusa** branding reference:
-
-| Token | Name | Hex Code | Purpose |
-|---|---|---|---|
-| `--qm-primary` | Deep Burgundy / Wine | `#6E123D` | Primary headers, brand anchors |
-| `--qm-secondary` | Rich Magenta | `#A50D52` | Key buttons, gradients, highlights |
-| `--qm-accent` | Bright Pink Accent | `#D83B70` | Badges, interactive states, icons |
-| `--qm-blush` | Soft Blush | `#F3D6E1` | Pill tags, tinted surface backdrops |
-| `--qm-background` | Off White | `#FAF8F9` | Clean, premium canvas |
-| `--qm-text` | Dark Text | `#24141C` | High contrast, accessible typography |
-| `--qm-border` | Rose Gray | `#F0E1E8` | Delicate structural card borders |
+**QuizMania** is a production-grade, event-ready quiz management platform comparable in core functionality to Google Forms Quiz. It is a Next.js monorepo with a private Admin Studio and a public participant-facing quiz application.
 
 ---
 
-## 🏛️ System Architecture
-
-QuizMania is organized as a clean npm monorepo with strict architectural separation between private admin and public participant interfaces:
+## 🏗️ Architecture Overview
 
 ```
 quizmania/
 ├── apps/
-│   ├── admin/                    # Private Local Admin Application (:3011)
-│   │   ├── src/app/              # Next.js App Router (Dashboard, Quizzes, Themes, Media, Results)
-│   │   ├── src/components/       # QuizEditor, QuestionEditor, OptionEditor, ThemeEditor, Importer
-│   │   └── public/branding/      # Rotaract Club of Mapusa brand assets
-│   └── public/                   # Public Quiz Application (:3010)
-│       ├── src/app/              # Next.js App Router (Landing, /quizzes, /q/[slug], /api/submit)
-│       ├── src/components/       # Hero, QuizCard, About, HowItWorks, RotaractSection, QuizRunner
-│       └── public/branding/      # Rotaract Club of Mapusa brand assets
+│   ├── admin/          # Private Admin Studio (port 3011) — NEVER deploy publicly
+│   └── public/         # Public Quiz App (port 3010) — quizmania.atreyakamat.dev
 ├── packages/
-│   ├── types/                    # Core TypeScript interfaces (Quiz, Question, Option, Theme, Submission)
-│   ├── quiz-schema/              # Zod schemas, JSON import/export validation & formatting
-│   └── shared/                   # Public DAL, Admin DAL, Server-side Scoring Engine, Supabase clients
+│   ├── types/          # Shared TypeScript interfaces (@quizmania/types)
+│   ├── quiz-schema/    # Zod validation schemas (@quizmania/quiz-schema)
+│   └── shared/         # DAL, scoring engine, supabase client, theme utils (@quizmania/shared)
 └── supabase/
-    └── migrations/               # PostgreSQL schema, RLS policies, Security Definer RPC, Storage buckets
+    └── migrations/     # Ordered SQL migration files
 ```
 
+### Supabase Database Schema
+
+| Table | Purpose |
+|---|---|
+| `quizzes` | Quiz metadata, settings, status |
+| `questions` | Questions with type, marks, scoring config |
+| `options` | Multiple-choice options with correct-answer flag |
+| `sections` | Optional quiz sections/groups |
+| `themes` | Visual theme configuration |
+| `quiz_attempts` | Session tracking per participant |
+| `submissions` | Final submission records with score |
+| `answers` | Per-question answer records |
+
 ---
 
-## 🔒 Security & Data Isolation Model
+## ✨ Feature Set
 
-1. **Zero Client-Side Correct Answers**: The public quiz frontend and its Data Access Layer (`getPublishedQuizBySlug`) **never** receive `is_correct`, correct answers, or private metadata.
-2. **Server-Side Scoring Engine**: Participant answers are evaluated exclusively server-side via `POST /api/quizzes/[slug]/submit` or the PostgreSQL `submit_quiz_answers` stored procedure (`SECURITY DEFINER`).
-3. **Row Level Security (RLS)**: Public anonymous users are restricted from viewing draft quizzes, reading `options.is_correct`, or inspecting other participants' submissions.
-4. **Standalone Private Admin**: Designed to execute in a local environment (`localhost:3011`) with administrative privileges, keeping admin routes unexposed to public participants.
+### Quiz Builder (Admin)
+- Multi-step quiz editor: Details → Settings → Questions → Theme
+- **5 question types**: Single Choice, Multiple Choice, True/False, Short Text, Paragraph
+- Image support on questions and options (via Supabase Storage)
+- Per-question settings: marks, negative marks, time limit, scoring method (all-or-nothing / partial credit)
+- Short text accepted answers with case sensitivity and whitespace normalization
+- Sections (optional grouping of questions)
+- Quiz-wide feature toggles: timer, shuffle, review, score visibility, club details collection
+- Publishing validation — blocks publish on fatal errors, warns on non-fatal
+- Move Up / Move Down for questions and options
+- Question duplication
+- JSON Import/Export (canonical versioned format)
+- Quiz Preview mode (non-submitting)
+
+### Scoring Engine (`packages/shared/src/scoring.ts`)
+- **Single choice**: full marks or negative marks on wrong answer
+- **Multiple choice (all-or-nothing)**: must select all correct and nothing wrong
+- **Multiple choice (partial credit)**: proportional marks based on correct selections
+- **True/False**: same as single choice
+- **Short text**: normalized comparison against accepted answers (case/space handling)
+- **Paragraph**: recorded for manual review, 0 marks auto-scored
+- Negative total score floor (optional `allow_negative_total` setting)
+
+### Quiz Session System
+- Attempt creation at quiz start (`POST /api/quizzes/[slug]/start`)
+- Session token for submission deduplication
+- Server-side expiry validation (checked at submit time)
+- Auto-save to `sessionStorage` for page-reload recovery
+- Configurable participant fields per quiz: name, email, phone, club, district
+
+### Security Model
+- All scoring is **server-side only** via `processQuizSubmission()`
+- `is_correct`, `accepted_answers`, `case_sensitive` are **never sent to public browser**
+- Public DAL strips all answer metadata
+- Admin uses service role key — **never exposed to public app**
+
+### AI Quiz Generator (Admin only)
+- Powered by [Ollama](https://ollama.ai) running locally — `llama3.2:3b` by default
+- Paste source content → AI converts to valid QuizMania JSON
+- Modes: convert from Q&A, generate from topic, add distractors
+- Full Zod validation of AI output before allowing save
+- Disabled by default; toggle in Admin → Settings → AI
 
 ---
 
-## 🚀 Getting Started Locally
+## 🚀 Getting Started
 
-### 1. Prerequisites
-- **Node.js**: v20+ (tested on Node v22)
-- **npm**: v10+
+### Prerequisites
+- Node.js 18+
+- npm 9+
+- A Supabase project (or use mock/offline mode for local dev)
+- (Optional) Ollama running locally for AI generation
 
-### 2. Install Dependencies
+### Installation
+
 ```bash
+git clone <repo>
+cd quizmania
 npm install
 ```
 
-### 3. Start Both Applications Concurrently
-```bash
-npm run dev
+### Environment Setup
+
+**`apps/admin/.env.local`**
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+# AI Generation (optional, admin-only)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2:3b
+OLLAMA_ENABLED=false
+OLLAMA_TIMEOUT_MS=60000
+
+PORT=3011
 ```
 
-Or start each app individually:
-```bash
-# Start Private Admin Studio (Port 3011)
-npm run dev:admin
+**`apps/public/.env.local`**
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
-# Start Public Quiz Experience (Port 3010)
-npm run dev:public
+PORT=3010
 ```
 
-### 4. Build Monorepo
+> ⚠️ Never put `SUPABASE_SERVICE_ROLE_KEY` in a `NEXT_PUBLIC_` variable. Server-side only.
+
+### Database Migrations
+
+```bash
+# Via Supabase CLI
+supabase db push
+
+# Or manually in Supabase SQL Editor (run in order):
+# 1. supabase/migrations/20260904000001_initial_quiz_schema.sql
+# 2. supabase/migrations/20260904000002_extend_quiz_engine.sql
+```
+
+### Development
+
+```bash
+npm run dev           # Both apps concurrently
+npm run dev:admin     # http://localhost:3011
+npm run dev:public    # http://localhost:3010
+```
+
+### Production Build
+
 ```bash
 npm run build
 ```
 
 ---
 
-## 🌐 Local URLs
+## 🤖 Ollama AI Integration
 
-| Application | URL | Description |
+### Setup
+
+```bash
+# Install Ollama from https://ollama.ai
+ollama pull llama3.2:3b
+ollama serve
+```
+
+Then in Admin → Settings → AI Configuration, enable the toggle and test the connection.
+
+### Configuration
+
+| Env Var | Default | Purpose |
 |---|---|---|
-| **Public Landing Page** | [http://localhost:3010](http://localhost:3010) | Main QuizMania landing page with Hero, Featured Quizzes, and Rotaract section |
-| **Public Quiz Directory** | [http://localhost:3010/quizzes](http://localhost:3010/quizzes) | Directory of all published quizzes |
-| **Sample Public Quiz** | [http://localhost:3010/q/rotaract-youth-bowl-2026](http://localhost:3010/q/rotaract-youth-bowl-2026) | Live quiz runner for Rotaract Youth Knowledge Bowl 2026 |
-| **Sample Nutrition Quiz** | [http://localhost:3010/q/nutrition-week-2026](http://localhost:3010/q/nutrition-week-2026) | Live quiz runner for Nutrition Week 2026 |
-| **Admin Studio Dashboard** | [http://localhost:3011](http://localhost:3011) | Private local admin metrics, quick actions, and recent quizzes |
-| **Admin Quiz Builder** | [http://localhost:3011/quizzes/create](http://localhost:3011/quizzes/create) | Quiz metadata, questions, marks, options, and live preview |
-| **Admin Theme Designer** | [http://localhost:3011/themes](http://localhost:3011/themes) | Dynamic CSS variables theme manager and preview |
-| **Admin JSON Importer** | [http://localhost:3011/quizzes?tab=import](http://localhost:3011/quizzes?tab=import) | Validates and imports quiz JSON with Zod error handling |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `OLLAMA_MODEL` | `llama3.2:3b` | Model to use |
+| `OLLAMA_ENABLED` | `false` | Must set `true` to enable |
+| `OLLAMA_TIMEOUT_MS` | `60000` | Request timeout in ms |
 
 ---
 
-## 🗄️ Database & Supabase Setup
+## 🧪 Scoring Tests
 
-When ready to connect to a live Supabase project:
+```bash
+cd packages/shared
+npm test
+```
 
-1. Copy `.env.example` to `.env.local` in `apps/admin` and `apps/public`.
-2. Fill in:
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
-   SUPABASE_SERVICE_ROLE_KEY=<your-service-role-secret>
-   ```
-3. Run the initial migration in your Supabase SQL Editor:
-   ```
-   supabase/migrations/20260904000001_initial_quiz_schema.sql
-   ```
-   This automatically provisions:
-   - Tables: `themes`, `quizzes`, `questions`, `options`, `submissions`, `answers`
-   - Row Level Security policies
-   - Storage Buckets: `quiz-covers`, `question-images`, `option-images`, `branding-assets`
-   - Default themes (including QuizMania Signature) & Seed Quizzes
-
-*Note: In the absence of live Supabase credentials, the platform automatically switches to an in-memory fallback store so every screen and flow is fully testable immediately.*
+Tests cover: negative marking, partial credit, case-insensitive short text, floor-at-zero total.
 
 ---
 
-## 📋 Recommended Next Development Step
+## 📦 Package Reference
 
-**Phase 2: Functional Admin Quiz Builder + Supabase Connection**
-1. Implement full interactive state persistence between the Admin Builder and Supabase.
-2. Complete drag-and-drop question ordering and option reordering.
-3. Wire live storage bucket file uploads for quiz covers and question diagrams.
+### `@quizmania/types`
+Key types: `QuizStatus`, `QuestionType`, `ScoringMethod`, `Quiz`, `Question`, `Option`, `Theme`, `QuizSection`, `QuizSettings`, `QuizAttempt`, `QuizFeatureFlags`, `PublicQuiz`, `PublicQuestion`, `PublicOption`, `QuizSubmissionPayload`, `QuizSubmissionResult`, `OllamaSettings`
+
+### `@quizmania/quiz-schema`
+Key exports: `questionSchema`, `quizSchema`, `quizJsonImportSchema`, `validateQuizJson()`, `quizSubmissionSchema`, `participantSchema`, `quizFeatureFlagsSchema`
+
+### `@quizmania/shared`
+Key exports: Supabase clients, `getAllQuizzes()`, `saveQuiz()`, `getPublishedQuizBySlug()`, `processQuizSubmission()`, `importQuizFromJson()`, `exportQuizToJson()`, `scoreQuestion()`, `calculateFinalScore()`, `getThemeCssVariables()`, `uploadFile()`
+
+---
+
+## 🌐 Public Deployment (Netlify)
+
+The public app deploys to `quizmania.atreyakamat.dev`.
+
+```
+Build command:   cd apps/public && npm run build
+Publish dir:     apps/public/.next
+```
+
+Set env vars in Netlify dashboard. **Do not deploy the admin app.**
+
+---
+
+## 🎨 Brand
+
+| Token | Hex | Usage |
+|---|---|---|
+| Primary | `#6E123D` | Headers, brand anchors |
+| Secondary | `#A50D52` | Buttons, gradients |
+| Accent | `#D83B70` | Badges, interactive states |
+| Blush | `#F3D6E1` | Surface backgrounds |
+| Background | `#FAF8F9` | Page canvas |
+
+---
+
+## 👤 Creator
+
+**QuizMania** was built by **Atreya Kamat** — web builder, platform systems developer, private tutor, and Founder of [Stix 'N' Vibes](https://stixnvibes.com).
+
+- 🌐 [atreyakamat.dev](https://atreyakamat.dev)
+- Platform: [quizmania.atreyakamat.dev](https://quizmania.atreyakamat.dev)
+
+Hosted for **Rotaract Club of Mapusa**, RI District 3170.
+
+---
+
+*© QuizMania. All rights reserved.*

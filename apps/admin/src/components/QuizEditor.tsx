@@ -3,12 +3,13 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Quiz, Question, Theme, QuizStatus } from '@quizmania/types';
-import { saveQuiz, setQuizStatus, deleteQuiz } from '@quizmania/shared';
 import { QuestionEditor } from './QuestionEditor';
 import { QuizStatusBadge } from './QuizStatusBadge';
 import { ImageUploader } from './ImageUploader';
 import { QuizPreview } from './QuizPreview';
 import { JsonExporter } from './JsonExporter';
+import { QuizJsonImportArea } from './QuizJsonImportArea';
+import type { ImportSummary } from '@quizmania/quiz-schema';
 import { 
   Save, 
   Globe2, 
@@ -19,7 +20,11 @@ import {
   Settings2, 
   Palette, 
   CheckCircle, 
-  AlertCircle 
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  FileEdit,
+  ExternalLink
 } from 'lucide-react';
 
 interface QuizEditorProps {
@@ -110,6 +115,58 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
     setQuiz(prev => ({ ...prev, questions: newQuestions }));
   };
 
+  const handleImportQuiz = (importedQuiz: Quiz, summary: ImportSummary) => {
+    setQuiz(prev => {
+      let matchedTheme = prev.theme;
+      let matchedThemeId = prev.theme_id;
+
+      if (importedQuiz.theme_id) {
+        const found = availableThemes.find(t => t.id === importedQuiz.theme_id);
+        if (found) {
+          matchedTheme = found;
+          matchedThemeId = found.id;
+        }
+      } else if (importedQuiz.theme && importedQuiz.theme.name) {
+        const found = availableThemes.find(t => t.name.toLowerCase() === importedQuiz.theme?.name.toLowerCase());
+        if (found) {
+          matchedTheme = found;
+          matchedThemeId = found.id;
+        }
+      }
+
+      return {
+        ...prev,
+        title: importedQuiz.title || prev.title,
+        slug: importedQuiz.slug || prev.slug,
+        description: importedQuiz.description !== undefined ? importedQuiz.description : prev.description,
+        cover_image: importedQuiz.cover_image || prev.cover_image,
+        instructions: importedQuiz.instructions || prev.instructions,
+        theme_id: matchedThemeId,
+        theme: matchedTheme,
+        settings: {
+          ...prev.settings,
+          ...importedQuiz.settings
+        },
+        sections: importedQuiz.sections && importedQuiz.sections.length > 0 ? importedQuiz.sections : prev.sections,
+        questions: (importedQuiz.questions || []).map((q, idx) => ({
+          ...q,
+          quiz_id: prev.id,
+          question_order: idx + 1,
+          options: (q.options || []).map((opt, oIdx) => ({
+            ...opt,
+            question_id: q.id,
+            option_order: oIdx + 1
+          }))
+        }))
+      };
+    });
+
+    setFeedback({
+      type: 'success',
+      message: `Imported successfully: ${summary.questionsCount} questions, ${summary.optionsCount} options${summary.sectionsCount > 0 ? `, ${summary.sectionsCount} sections` : ''}. Review and edit details below, then click Save Draft or Publish.`
+    });
+  };
+
   const handleSave = async (overrideStatus?: QuizStatus) => {
     if (!quiz.title.trim()) {
       setFeedback({ type: 'error', message: 'Quiz title is required' });
@@ -127,7 +184,17 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
     const quizToSave = { ...quiz, status: targetStatus };
 
     try {
-      const saved = await saveQuiz(quizToSave);
+      const res = await fetch('/api/quizzes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(quizToSave)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Save failed');
+      }
+
+      const saved = data.quiz;
       setQuiz(saved);
       setFeedback({
         type: 'success',
@@ -135,6 +202,10 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
           ? `Quiz published successfully! Available at /q/${saved.slug}` 
           : 'Quiz saved as draft successfully!'
       });
+
+      if (!initialQuiz || initialQuiz.id !== saved.id) {
+        router.replace(`/quizzes/${saved.id}/edit`);
+      }
       router.refresh();
     } catch (err) {
       setFeedback({ type: 'error', message: err instanceof Error ? err.message : 'Save failed' });
@@ -145,8 +216,17 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
 
   const handleDelete = async () => {
     if (confirm('Are you sure you want to delete this quiz? This action cannot be undone.')) {
-      await deleteQuiz(quiz.id);
-      router.push('/quizzes');
+      try {
+        const res = await fetch(`/api/quizzes/${quiz.id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Delete failed');
+        }
+        router.push('/quizzes');
+        router.refresh();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Delete failed');
+      }
     }
   };
 
@@ -170,6 +250,17 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
           <span className="text-xs text-slate-500">
             {questions.length} Questions | {totalMarks} Total Marks
           </span>
+          {quiz.status === 'published' && (
+            <a
+              href={`http://localhost:3010/q/${quiz.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-lg transition-colors"
+            >
+              <span>Test Live: /q/{quiz.slug}</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -184,25 +275,52 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
             Preview Quiz
           </button>
 
-          <button
-            type="button"
-            onClick={() => handleSave('draft')}
-            disabled={isSaving}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition-colors shadow-xs"
-          >
-            <Save className="w-3.5 h-3.5" />
-            Save Draft
-          </button>
+          {/* If published, provide Unpublish button + Save Live button */}
+          {quiz.status === 'published' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => handleSave('draft')}
+                disabled={isSaving}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-colors shadow-xs"
+                title="Revert published quiz back to draft status"
+              >
+                <FileEdit className="w-3.5 h-3.5" />
+                Unpublish to Draft
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSave('published')}
+                disabled={isSaving}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition-colors"
+              >
+                <Globe2 className="w-3.5 h-3.5" />
+                Save & Keep Published
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => handleSave('draft')}
+                disabled={isSaving}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition-colors shadow-xs"
+              >
+                <Save className="w-3.5 h-3.5" />
+                Save Draft
+              </button>
 
-          <button
-            type="button"
-            onClick={() => handleSave('published')}
-            disabled={isSaving}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-xs transition-colors"
-          >
-            <Globe2 className="w-3.5 h-3.5" />
-            {quiz.status === 'published' ? 'Update & Publish' : 'Publish Quiz'}
-          </button>
+              <button
+                type="button"
+                onClick={() => handleSave('published')}
+                disabled={isSaving}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-xs transition-colors"
+              >
+                <Globe2 className="w-3.5 h-3.5" />
+                Publish Quiz
+              </button>
+            </>
+          )}
 
           {quiz.id && (
             <button
@@ -244,7 +362,7 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
               type="text"
               value={quiz.title}
               onChange={e => handleTitleChange(e.target.value)}
-              placeholder="e.g. Nutrition Week 2026 Quiz"
+              placeholder="e.g. Rotaract Mapusa Trivia 2026"
               className="w-full text-sm border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-blue-500"
             />
           </div>
@@ -262,7 +380,7 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
                 type="text"
                 value={quiz.slug}
                 onChange={e => setQuiz(prev => ({ ...prev, slug: generateSlug(e.target.value) }))}
-                placeholder="nutrition-week-2026"
+                placeholder="rotaract-mapusa-trivia-2026"
                 className="w-full text-sm border border-slate-200 rounded-r-lg p-2.5 font-mono text-slate-800 focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -320,79 +438,26 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
           </div>
         </div>
 
-        {/* Settings */}
-        <div className="pt-4 border-t border-slate-100">
-          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <Settings2 className="w-3.5 h-3.5" />
-            Quiz Settings
-          </h4>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-[11px] text-slate-600 mb-1">Passing Score (%)</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={quiz.settings?.passing_score_percentage ?? 50}
-                onChange={e => setQuiz(prev => ({
-                  ...prev,
-                  settings: { ...prev.settings, passing_score_percentage: parseInt(e.target.value) || 50 }
-                }))}
-                className="w-full text-xs border border-slate-200 rounded p-2 text-center font-bold"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] text-slate-600 mb-1">Time Limit (mins)</label>
-              <input
-                type="number"
-                min="1"
-                value={quiz.settings?.time_limit_minutes ?? ''}
-                onChange={e => setQuiz(prev => ({
-                  ...prev,
-                  settings: { ...prev.settings, time_limit_minutes: e.target.value ? parseInt(e.target.value) : null }
-                }))}
-                placeholder="None"
-                className="w-full text-xs border border-slate-200 rounded p-2 text-center"
-              />
-            </div>
-            <div className="flex items-center pt-4">
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={quiz.settings?.show_score_immediately ?? true}
-                  onChange={e => setQuiz(prev => ({
-                    ...prev,
-                    settings: { ...prev.settings, show_score_immediately: e.target.checked }
-                  }))}
-                  className="rounded border-slate-300 text-blue-600"
-                />
-                <span>Show score immediately</span>
-              </label>
-            </div>
-            <div className="flex items-center pt-4">
-              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={quiz.settings?.require_participant_email ?? false}
-                  onChange={e => setQuiz(prev => ({
-                    ...prev,
-                    settings: { ...prev.settings, require_participant_email: e.target.checked }
-                  }))}
-                  className="rounded border-slate-300 text-blue-600"
-                />
-                <span>Require Email</span>
-              </label>
-            </div>
-          </div>
-        </div>
       </div>
 
-      {/* Questions Section */}
+      {/* 2. Import JSON Section */}
+      <QuizJsonImportArea
+        onImport={handleImportQuiz}
+        existingQuizId={quiz.id}
+        defaultExpanded={questions.length === 0}
+      />
+
+      {/* 3. Questions Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-slate-800 text-lg">
-            Questions ({questions.length})
-          </h3>
+          <div>
+            <h3 className="font-bold text-slate-800 text-lg">
+              Questions ({questions.length})
+            </h3>
+            <p className="text-xs text-slate-500">
+              {totalMarks} Total Marks across {questions.length} questions
+            </p>
+          </div>
           <button
             type="button"
             onClick={handleAddQuestion}
@@ -406,14 +471,20 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
         {questions.length === 0 ? (
           <div className="bg-white rounded-xl border border-dashed border-slate-300 p-12 text-center space-y-3">
             <p className="text-sm text-slate-500">No questions added yet.</p>
-            <button
-              type="button"
-              onClick={handleAddQuestion}
-              className="inline-flex items-center gap-1.5 text-xs text-blue-600 font-semibold hover:underline"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add your first question
-            </button>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={handleAddQuestion}
+                className="inline-flex items-center gap-1.5 text-xs text-blue-600 font-semibold hover:underline"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add manually
+              </button>
+              <span className="text-slate-300">|</span>
+              <span className="text-xs text-slate-500">
+                or use the JSON Importer above
+              </span>
+            </div>
           </div>
         ) : (
           <div className="space-y-6">
@@ -422,12 +493,129 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
                 key={q.id || idx}
                 question={q}
                 questionNumber={idx + 1}
+                totalQuestions={questions.length}
+                onDuplicate={() => {}}
+                onMoveUp={() => {}}
+                onMoveDown={() => {}}
                 onChange={updated => handleUpdateQuestion(idx, updated)}
                 onDelete={() => handleDeleteQuestion(idx)}
               />
             ))}
           </div>
         )}
+      </div>
+
+      {/* 4. Quiz Settings & Rules Card */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+            <Settings2 className="w-4 h-4 text-blue-600" />
+            Quiz Settings & Rules
+          </h3>
+          <span className="text-xs text-slate-500 font-normal">
+            ({quiz.settings?.time_limit_minutes ? `${quiz.settings.time_limit_minutes}m limit` : 'No time limit'}, pass {quiz.settings?.passing_score_percentage ?? 50}%)
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-700 mb-1">Passing Score (%)</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              value={quiz.settings?.passing_score_percentage ?? 50}
+              onChange={e => setQuiz(prev => ({
+                ...prev,
+                settings: { ...prev.settings, passing_score_percentage: parseInt(e.target.value) || 50 }
+              }))}
+              className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white text-center font-bold text-slate-800 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-700 mb-1">Time Limit (mins)</label>
+            <input
+              type="number"
+              min="1"
+              value={quiz.settings?.time_limit_minutes ?? ''}
+              onChange={e => setQuiz(prev => ({
+                ...prev,
+                settings: { ...prev.settings, time_limit_minutes: e.target.value ? parseInt(e.target.value) : null }
+              }))}
+              placeholder="No limit"
+              className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white text-center text-slate-800 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div className="flex items-center pt-2 sm:pt-5">
+            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={quiz.settings?.show_score_immediately ?? true}
+                onChange={e => setQuiz(prev => ({
+                  ...prev,
+                  settings: { ...prev.settings, show_score_immediately: e.target.checked }
+                }))}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>Show score immediately</span>
+            </label>
+          </div>
+          <div className="flex items-center pt-2 sm:pt-5">
+            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={quiz.settings?.require_participant_email ?? false}
+                onChange={e => setQuiz(prev => ({
+                  ...prev,
+                  settings: { ...prev.settings, require_participant_email: e.target.checked }
+                }))}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>Require Email</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Instructions / Participant Rules */}
+        <div className="pt-2">
+          <label className="block text-xs font-semibold text-slate-700 mb-1">
+            Participant Instructions & Rules
+          </label>
+          <textarea
+            rows={3}
+            value={quiz.instructions || ''}
+            onChange={e => setQuiz(prev => ({ ...prev, instructions: e.target.value || null }))}
+            placeholder="e.g. Read each question carefully. You have 15 minutes to finish. Do not refresh the page during the quiz..."
+            className="w-full text-xs border border-slate-200 rounded-lg p-2.5 bg-slate-50/50 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
+          />
+        </div>
+      </div>
+
+      {/* 5. Bottom Save / Actions Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+        <div className="text-xs text-slate-500">
+          Ready to test? Save your changes as a draft or publish live to test immediately.
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => handleSave('draft')}
+            disabled={isSaving}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition-colors shadow-xs disabled:opacity-50"
+          >
+            <Save className="w-4 h-4" />
+            <span>Save Draft</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSave('published')}
+            disabled={isSaving}
+            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-xs transition-colors disabled:opacity-50"
+          >
+            <Globe2 className="w-4 h-4" />
+            <span>{quiz.status === 'published' ? 'Save & Keep Published' : 'Publish Quiz'}</span>
+          </button>
+        </div>
       </div>
     </div>
   );

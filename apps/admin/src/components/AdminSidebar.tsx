@@ -8,10 +8,7 @@ import {
   LayoutDashboard, 
   HelpCircle, 
   PlusCircle, 
-  FileEdit, 
-  Globe2, 
   Palette, 
-  Image as ImageIcon, 
   BarChart3, 
   Settings,
   Sparkles
@@ -78,24 +75,6 @@ export function AdminSidebar() {
               <PlusCircle className="w-4 h-4 text-[#D83B70]" />
               Create Quiz
             </Link>
-            <Link
-              href="/quizzes/drafts"
-              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-colors ${
-                pathname === '/quizzes/drafts' ? 'bg-[#301322] text-white font-medium' : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <FileEdit className="w-4 h-4 text-amber-400" />
-              Drafts
-            </Link>
-            <Link
-              href="/quizzes/published"
-              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-colors ${
-                pathname === '/quizzes/published' ? 'bg-[#301322] text-white font-medium' : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Globe2 className="w-4 h-4 text-emerald-400" />
-              Published
-            </Link>
           </div>
         </div>
 
@@ -115,47 +94,10 @@ export function AdminSidebar() {
               <Palette className="w-4 h-4 text-purple-400" />
               All Themes
             </Link>
-            <Link
-              href="/themes/create"
-              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-colors ${
-                pathname === '/themes/create' ? 'bg-[#301322] text-white font-medium' : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <PlusCircle className="w-4 h-4 text-purple-400" />
-              Create Theme
-            </Link>
           </div>
         </div>
 
-        {/* Media Storage Group */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between px-3 py-1 text-xs font-semibold text-[#F3D6E1]/60 uppercase tracking-wider">
-            <span>Media</span>
-            <ImageIcon className="w-3.5 h-3.5" />
-          </div>
-          <div className="pl-1 space-y-1">
-            <Link
-              href="/media/quizzes"
-              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-colors ${
-                pathname === '/media/quizzes' ? 'bg-[#301322] text-white font-medium' : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <ImageIcon className="w-4 h-4 text-cyan-400" />
-              Quiz Images
-            </Link>
-            <Link
-              href="/media/questions"
-              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-colors ${
-                pathname === '/media/questions' ? 'bg-[#301322] text-white font-medium' : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <ImageIcon className="w-4 h-4 text-cyan-400" />
-              Question Images
-            </Link>
-          </div>
-        </div>
-
-        {/* Analytics & System */}
+        {/* Results, AI & Settings */}
         <div className="space-y-1 pt-2 border-t border-[#301322]">
           <Link
             href="/results"
@@ -164,7 +106,16 @@ export function AdminSidebar() {
             }`}
           >
             <BarChart3 className="w-4 h-4 text-emerald-400" />
-            Results
+            Responses
+          </Link>
+          <Link
+            href="/ai"
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+              pathname === '/ai' ? 'bg-[#301322] text-white font-medium' : 'text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            AI Generator
           </Link>
           <Link
             href="/settings"

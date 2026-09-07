@@ -1,14 +1,16 @@
 import React from 'react';
 import { AdminHeader } from '@/components/AdminHeader';
-import { isSupabaseConfigured, isSupabaseAdminConfigured } from '@quizmania/shared';
-import { ShieldCheck, Database, HardDrive, Terminal, CheckCircle2, AlertCircle } from 'lucide-react';
+import { isSupabaseConfigured, isSupabaseAdminConfigured, getDatabaseStatus } from '@quizmania/shared';
+import { ShieldCheck, Database, CheckCircle2, AlertCircle } from 'lucide-react';
+import { AISettings } from './AISettings';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
   const publicConfigured = isSupabaseConfigured();
   const adminConfigured = isSupabaseAdminConfigured();
+  const dbStatus = await getDatabaseStatus();
 
   return (
     <div>
@@ -55,10 +57,33 @@ export default function SettingsPage() {
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-6">
           <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
             <Database className="w-5 h-5 text-purple-600" />
-            Supabase Connection Status
+            Database & Supabase Status
           </h3>
 
           <div className="space-y-3">
+            <div className="flex items-center justify-between p-3.5 rounded-lg border border-slate-200">
+              <div className="flex items-center gap-3">
+                {dbStatus.ready ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-amber-500" />
+                )}
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block">
+                    Active Storage Mode: {dbStatus.mode === 'supabase' ? 'Live Supabase PostgreSQL' : 'Local Disk Store (/tmp/quizmania-local-store.json)'}
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    {dbStatus.message}
+                  </span>
+                </div>
+              </div>
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                dbStatus.ready ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+              }`}>
+                {dbStatus.ready ? 'Database Live' : 'Mock Mode'}
+              </span>
+            </div>
+
             <div className="flex items-center justify-between p-3.5 rounded-lg border border-slate-200">
               <div className="flex items-center gap-3">
                 {publicConfigured ? (
@@ -68,7 +93,7 @@ export default function SettingsPage() {
                 )}
                 <div>
                   <span className="text-xs font-bold text-slate-800 block">
-                    Public Supabase Client (NEXT_PUBLIC_SUPABASE_URL, ANON_KEY)
+                    Public Client (NEXT_PUBLIC_SUPABASE_URL, ANON_KEY)
                   </span>
                   <span className="text-[11px] text-slate-500">
                     Used by Public app for published quiz retrieval subject to RLS
@@ -78,7 +103,7 @@ export default function SettingsPage() {
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                 publicConfigured ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
               }`}>
-                {publicConfigured ? 'Configured' : 'Mock Fallback Active'}
+                {publicConfigured ? 'Configured' : 'Missing Env'}
               </span>
             </div>
 
@@ -101,18 +126,21 @@ export default function SettingsPage() {
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                 adminConfigured ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
               }`}>
-                {adminConfigured ? 'Configured' : 'Mock Fallback Active'}
+                {adminConfigured ? 'Configured' : 'Missing Env'}
               </span>
             </div>
           </div>
 
           <div className="p-4 bg-slate-900 text-slate-200 rounded-lg font-mono text-xs space-y-1">
-            <div className="text-slate-400 text-[11px] mb-1"># Migration command for Supabase CLI:</div>
-            <div className="text-emerald-400">supabase db push</div>
-            <div className="text-slate-400 text-[11px] mt-2"># Or execute migration file in Supabase SQL editor:</div>
-            <div className="text-blue-300">supabase/migrations/20260904000001_initial_quiz_schema.sql</div>
+            <div className="text-slate-400 text-[11px] mb-1"># To execute schema in Supabase SQL Editor:</div>
+            <div className="text-emerald-400">Copy and paste: supabase/schema.sql</div>
+            <div className="text-slate-400 text-[11px] mt-2"># Storage buckets configured:</div>
+            <div className="text-blue-300">quiz-covers, question-images, option-images, branding-assets</div>
           </div>
         </div>
+
+        {/* AI Settings */}
+        <AISettings />
       </div>
     </div>
   );

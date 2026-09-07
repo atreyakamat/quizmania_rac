@@ -39,6 +39,10 @@ export function getSupabasePublicClient(): SupabaseClient | null {
  * NEVER expose this client to the public browser client!
  */
 export function getSupabaseAdminClient(): SupabaseClient | null {
+  if (typeof window !== 'undefined') {
+    // Hard security guarantee: Service role client must never be instantiated in browser
+    return null;
+  }
   if (!isSupabaseAdminConfigured()) {
     return null;
   }
@@ -51,3 +55,76 @@ export function getSupabaseAdminClient(): SupabaseClient | null {
   }
   return adminClientInstance;
 }
+
+let dbReadyCache: { ready: boolean; timestamp: number } | null = null;
+
+/**
+ * Verifies that Supabase is both configured and has the required database schema (public.quizzes table) available.
+ */
+export async function isSupabaseDatabaseReady(): Promise<boolean> {
+  if (!isSupabaseAdminConfigured() && !isSupabaseConfigured()) {
+    return false;
+  }
+
+  const now = Date.now();
+  if (dbReadyCache && now - dbReadyCache.timestamp < 5000) {
+    return dbReadyCache.ready;
+  }
+
+  const supabase = getSupabaseAdminClient() || getSupabasePublicClient();
+  if (!supabase) {
+    dbReadyCache = { ready: false, timestamp: now };
+    return false;
+  }
+
+  try {
+    const { error } = await supabase.from('quizzes').select('id').limit(1);
+    if (!error) {
+      dbReadyCache = { ready: true, timestamp: now };
+      return true;
+    }
+    dbReadyCache = { ready: false, timestamp: now };
+    return false;
+  } catch {
+    dbReadyCache = { ready: false, timestamp: now };
+    return false;
+  }
+}
+
+/**
+ * Returns deterministic active storage mode and human-readable explanation.
+ */
+export async function getDatabaseStatus(): Promise<{
+  mode: 'supabase' | 'mock';
+  configured: boolean;
+  ready: boolean;
+  message: string;
+}> {
+  const configured = isSupabaseConfigured() || isSupabaseAdminConfigured();
+  if (!configured) {
+    return {
+      mode: 'mock',
+      configured: false,
+      ready: false,
+      message: 'Standalone Mock Mode (no Supabase credentials in .env)'
+    };
+  }
+
+  const ready = await isSupabaseDatabaseReady();
+  if (ready) {
+    return {
+      mode: 'supabase',
+      configured: true,
+      ready: true,
+      message: 'Supabase PostgreSQL (Live Database Connected)'
+    };
+  }
+
+  return {
+    mode: 'mock',
+    configured: true,
+    ready: false,
+    message: 'Mock Store Active: Supabase credentials found, but schema tables are not yet created in the database. Run supabase/schema.sql in Supabase SQL Editor.'
+  };
+}
+

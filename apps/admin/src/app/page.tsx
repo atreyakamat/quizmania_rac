@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { AdminHeader } from '@/components/AdminHeader';
 import { QuizStatusBadge } from '@/components/QuizStatusBadge';
-import { getAllQuizzes, getAllSubmissions, getAllThemes, isSupabaseConfigured } from '@quizmania/shared';
+import { getAllQuizzes, getAllSubmissions, getAllThemes, getDatabaseStatus } from '@quizmania/shared';
 import { 
   HelpCircle, 
   Globe2, 
@@ -22,10 +22,11 @@ export default async function AdminDashboardPage() {
   const quizzes = await getAllQuizzes();
   const themes = await getAllThemes();
   const submissions = await getAllSubmissions();
+  const dbStatus = await getDatabaseStatus();
 
   const publishedCount = quizzes.filter(q => q.status === 'published').length;
   const draftCount = quizzes.filter(q => q.status === 'draft').length;
-  const isDbLive = isSupabaseConfigured();
+  const isDbLive = dbStatus.mode === 'supabase';
 
   return (
     <div>
@@ -41,12 +42,12 @@ export default async function AdminDashboardPage() {
             <div className={`w-3 h-3 rounded-full ${isDbLive ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
             <div>
               <span className="text-xs font-bold text-slate-800">
-                Data Source: {isDbLive ? 'Supabase PostgreSQL (Live)' : 'In-Memory Mock Store (Development Mode)'}
+                Data Source: {isDbLive ? 'Supabase PostgreSQL (Live)' : 'Local Storage Mode (Development)'}
               </span>
               <p className="text-[11px] text-slate-500">
                 {isDbLive 
                   ? 'All changes sync directly to your Supabase PostgreSQL instance and storage buckets.'
-                  : 'Operating in standalone zero-config dev mode. Configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to connect live DB.'}
+                  : dbStatus.message}
               </p>
             </div>
           </div>

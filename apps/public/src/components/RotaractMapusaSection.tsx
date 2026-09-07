@@ -88,7 +88,7 @@ export function RotaractMapusaSection() {
                   </div>
                   <span className="text-xs font-bold text-[#24141C] block">Awareness Drives</span>
                   <span className="text-[11px] text-[#6B5A62] leading-snug block">
-                    Nutrition awareness, health campaigns, and educational competitions across Goa.
+                    Community wellness, health campaigns, and educational competitions across Goa.
                   </span>
                 </div>
               </div>

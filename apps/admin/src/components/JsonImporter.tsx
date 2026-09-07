@@ -2,57 +2,8 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { validateQuizJson } from '@quizmania/quiz-schema';
-import { importQuizFromJson } from '@quizmania/shared';
+import { validateQuizJson, EXAMPLE_IMPORT_JSON } from '@quizmania/quiz-schema';
 import { FileUp, AlertTriangle, CheckCircle, Code, Sparkles } from 'lucide-react';
-
-const SAMPLE_QUIZ_JSON = `{
-  "title": "Nutrition Week Quiz",
-  "slug": "nutrition-week-2026",
-  "description": "Test your knowledge about nutrition.",
-  "status": "draft",
-  "theme": {
-    "name": "Nature Green",
-    "primaryColor": "#2E7D32",
-    "secondaryColor": "#81C784",
-    "backgroundColor": "#F1F8E9",
-    "surfaceColor": "#FFFFFF",
-    "textColor": "#1A1A1A"
-  },
-  "coverImage": null,
-  "questions": [
-    {
-      "id": "q1",
-      "question": "Which nutrient is important for building muscles?",
-      "type": "single_choice",
-      "required": true,
-      "marks": 5,
-      "image": null,
-      "options": [
-        {
-          "id": "a",
-          "text": "Carbohydrates",
-          "correct": false
-        },
-        {
-          "id": "b",
-          "text": "Protein",
-          "correct": true
-        },
-        {
-          "id": "c",
-          "text": "Vitamins",
-          "correct": false
-        },
-        {
-          "id": "d",
-          "text": "Water",
-          "correct": false
-        }
-      ]
-    }
-  ]
-}`;
 
 export function JsonImporter({ onImportSuccess }: { onImportSuccess?: (quizId: string) => void }) {
   const router = useRouter();
@@ -86,7 +37,16 @@ export function JsonImporter({ onImportSuccess }: { onImportSuccess?: (quizId: s
 
     setIsSubmitting(true);
     try {
-      const createdQuiz = await importQuizFromJson(validation.data);
+      const res = await fetch('/api/quizzes/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: validation.data })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || (data.errors ? data.errors.join(', ') : 'Failed to import quiz'));
+      }
+      const createdQuiz = data.quiz;
       setSuccessMessage(`Successfully imported quiz: "${createdQuiz.title}" (${createdQuiz.slug})`);
       if (onImportSuccess) {
         onImportSuccess(createdQuiz.id);
@@ -117,7 +77,7 @@ export function JsonImporter({ onImportSuccess }: { onImportSuccess?: (quizId: s
 
         <button
           type="button"
-          onClick={() => setJsonText(SAMPLE_QUIZ_JSON)}
+          onClick={() => setJsonText(EXAMPLE_IMPORT_JSON)}
           className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors"
         >
           <Sparkles className="w-3.5 h-3.5" />

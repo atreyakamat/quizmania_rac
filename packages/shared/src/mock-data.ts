@@ -1,9 +1,9 @@
-import type { Theme, Quiz, Submission } from '@quizmania/types';
+import type { Theme, Quiz, Submission, Answer } from '@quizmania/types';
 import { QUIZMANIA_BRAND } from './brand/quizmania-theme';
 
 export const mockThemes: Theme[] = [
   {
-    id: 'theme-quizmania-signature',
+    id: 'd0000000-0000-0000-0000-000000000001',
     name: 'QuizMania Signature (Rotaract)',
     primary_color: QUIZMANIA_BRAND.colors.primary,
     secondary_color: QUIZMANIA_BRAND.colors.secondary,
@@ -16,7 +16,7 @@ export const mockThemes: Theme[] = [
     created_at: new Date().toISOString()
   },
   {
-    id: 'theme-nature-green',
+    id: 'd0000000-0000-0000-0000-000000000002',
     name: 'Nature Green',
     primary_color: '#2E7D32',
     secondary_color: '#81C784',
@@ -29,7 +29,7 @@ export const mockThemes: Theme[] = [
     created_at: new Date().toISOString()
   },
   {
-    id: 'theme-ocean-blue',
+    id: 'd0000000-0000-0000-0000-000000000003',
     name: 'Ocean Blue',
     primary_color: '#0284C7',
     secondary_color: '#7DD3FC',
@@ -43,300 +43,211 @@ export const mockThemes: Theme[] = [
   }
 ];
 
-export const mockQuizzes: Quiz[] = [
-  {
-    id: 'quiz-nutrition-week-2026',
-    title: 'Nutrition Week Quiz 2026',
-    slug: 'nutrition-week-2026',
-    description: 'Celebrate Nutrition Week with the Rotaract Club of Mapusa! Test your knowledge about healthy eating, nutrients, and balanced lifestyles. (Eligible for club collaboration recognition: minimum 3 members required per club).',
-    cover_image: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=1200&auto=format&fit=crop&q=80',
-    status: 'published',
-    theme_id: 'theme-quizmania-signature',
-    theme: mockThemes[0],
-    settings: {
-      time_limit_minutes: 15,
-      shuffle_questions: false,
-      shuffle_options: false,
-      passing_score_percentage: 60,
-      show_score_immediately: true,
-      allow_review: true,
-      require_participant_email: true,
-      collect_club_details: true
-    },
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updated_at: new Date().toISOString(),
-    questions: [
-      {
-        id: 'nq-1',
-        quiz_id: 'quiz-nutrition-week-2026',
-        question_text: "Which nutrient is the body's primary source of energy?",
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 5,
-        required: true,
-        question_order: 1,
-        options: [
-          { id: 'nq-1-a', question_id: 'nq-1', option_text: 'Vitamins', option_image: null, is_correct: false, option_order: 1 },
-          { id: 'nq-1-b', question_id: 'nq-1', option_text: 'Proteins', option_image: null, is_correct: false, option_order: 2 },
-          { id: 'nq-1-c', question_id: 'nq-1', option_text: 'Carbohydrates', option_image: null, is_correct: true, option_order: 3 },
-          { id: 'nq-1-d', question_id: 'nq-1', option_text: 'Minerals', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      },
-      {
-        id: 'nq-2',
-        quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'Which vitamin is mainly produced in the body when the skin is exposed to sunlight?',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 5,
-        required: true,
-        question_order: 2,
-        options: [
-          { id: 'nq-2-a', question_id: 'nq-2', option_text: 'Vitamin A', option_image: null, is_correct: false, option_order: 1 },
-          { id: 'nq-2-b', question_id: 'nq-2', option_text: 'Vitamin C', option_image: null, is_correct: false, option_order: 2 },
-          { id: 'nq-2-c', question_id: 'nq-2', option_text: 'Vitamin D', option_image: null, is_correct: true, option_order: 3 },
-          { id: 'nq-2-d', question_id: 'nq-2', option_text: 'Vitamin K', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      },
-      {
-        id: 'nq-3',
-        quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'Which nutrient is especially important for building and repairing body tissues?',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 5,
-        required: true,
-        question_order: 3,
-        options: [
-          { id: 'nq-3-a', question_id: 'nq-3', option_text: 'Protein', option_image: null, is_correct: true, option_order: 1 },
-          { id: 'nq-3-b', question_id: 'nq-3', option_text: 'Fibre', option_image: null, is_correct: false, option_order: 2 },
-          { id: 'nq-3-c', question_id: 'nq-3', option_text: 'Water', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'nq-3-d', question_id: 'nq-3', option_text: 'Carbohydrates', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      },
-      {
-        id: 'nq-4',
-        quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'Which of the following foods is generally a good source of dietary fibre?',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 5,
-        required: true,
-        question_order: 4,
-        options: [
-          { id: 'nq-4-a', question_id: 'nq-4', option_text: 'White sugar', option_image: null, is_correct: false, option_order: 1 },
-          { id: 'nq-4-b', question_id: 'nq-4', option_text: 'Whole grains', option_image: null, is_correct: true, option_order: 2 },
-          { id: 'nq-4-c', question_id: 'nq-4', option_text: 'Butter', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'nq-4-d', question_id: 'nq-4', option_text: 'Soft drinks', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      },
-      {
-        id: 'nq-5',
-        quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'Which mineral is important for maintaining healthy bones and teeth?',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 5,
-        required: true,
-        question_order: 5,
-        options: [
-          { id: 'nq-5-a', question_id: 'nq-5', option_text: 'Iron', option_image: null, is_correct: false, option_order: 1 },
-          { id: 'nq-5-b', question_id: 'nq-5', option_text: 'Calcium', option_image: null, is_correct: true, option_order: 2 },
-          { id: 'nq-5-c', question_id: 'nq-5', option_text: 'Sodium', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'nq-5-d', question_id: 'nq-5', option_text: 'Potassium', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      },
-      {
-        id: 'nq-6',
-        quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'Which nutrient helps the body absorb certain vitamins and provides stored energy?',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 5,
-        required: true,
-        question_order: 6,
-        options: [
-          { id: 'nq-6-a', question_id: 'nq-6', option_text: 'Fats', option_image: null, is_correct: true, option_order: 1 },
-          { id: 'nq-6-b', question_id: 'nq-6', option_text: 'Water', option_image: null, is_correct: false, option_order: 2 },
-          { id: 'nq-6-c', question_id: 'nq-6', option_text: 'Minerals', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'nq-6-d', question_id: 'nq-6', option_text: 'Fibre', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      },
-      {
-        id: 'nq-7',
-        quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'Which of the following is generally considered a healthy snack option?',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 5,
-        required: true,
-        question_order: 7,
-        options: [
-          { id: 'nq-7-a', question_id: 'nq-7', option_text: 'Fresh fruit', option_image: null, is_correct: true, option_order: 1 },
-          { id: 'nq-7-b', question_id: 'nq-7', option_text: 'Candy', option_image: null, is_correct: false, option_order: 2 },
-          { id: 'nq-7-c', question_id: 'nq-7', option_text: 'Sugary soda', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'nq-7-d', question_id: 'nq-7', option_text: 'Deep-fried chips', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      },
-      {
-        id: 'nq-8',
-        quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'What is the main benefit of drinking enough water?',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 5,
-        required: true,
-        question_order: 8,
-        options: [
-          { id: 'nq-8-a', question_id: 'nq-8', option_text: 'It completely replaces meals', option_image: null, is_correct: false, option_order: 1 },
-          { id: 'nq-8-b', question_id: 'nq-8', option_text: 'It helps maintain normal body functions and hydration', option_image: null, is_correct: true, option_order: 2 },
-          { id: 'nq-8-c', question_id: 'nq-8', option_text: 'It provides large amounts of protein', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'nq-8-d', question_id: 'nq-8', option_text: 'It replaces the need for fruits and vegetables', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      },
-      {
-        id: 'nq-9',
-        quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'Which nutrient is important for carrying oxygen in the blood?',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 5,
-        required: true,
-        question_order: 9,
-        options: [
-          { id: 'nq-9-a', question_id: 'nq-9', option_text: 'Calcium', option_image: null, is_correct: false, option_order: 1 },
-          { id: 'nq-9-b', question_id: 'nq-9', option_text: 'Iron', option_image: null, is_correct: true, option_order: 2 },
-          { id: 'nq-9-c', question_id: 'nq-9', option_text: 'Vitamin C', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'nq-9-d', question_id: 'nq-9', option_text: 'Fibre', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      },
-      {
-        id: 'nq-10',
-        quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'A balanced diet generally includes:',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 5,
-        required: true,
-        question_order: 10,
-        options: [
-          { id: 'nq-10-a', question_id: 'nq-10', option_text: 'Only protein-rich foods', option_image: null, is_correct: false, option_order: 1 },
-          { id: 'nq-10-b', question_id: 'nq-10', option_text: 'Only fruits and vegetables', option_image: null, is_correct: false, option_order: 2 },
-          { id: 'nq-10-c', question_id: 'nq-10', option_text: 'A variety of foods from different food groups', option_image: null, is_correct: true, option_order: 3 },
-          { id: 'nq-10-d', question_id: 'nq-10', option_text: 'Only low-fat foods', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      },
-      {
-        id: 'nq-11',
-        quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'Which of these is a good source of healthy unsaturated fats?',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 5,
-        required: true,
-        question_order: 11,
-        options: [
-          { id: 'nq-11-a', question_id: 'nq-11', option_text: 'Nuts', option_image: null, is_correct: true, option_order: 1 },
-          { id: 'nq-11-b', question_id: 'nq-11', option_text: 'Candy', option_image: null, is_correct: false, option_order: 2 },
-          { id: 'nq-11-c', question_id: 'nq-11', option_text: 'Soft drinks', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'nq-11-d', question_id: 'nq-11', option_text: 'Refined sugar', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      },
-      {
-        id: 'nq-12',
-        quiz_id: 'quiz-nutrition-week-2026',
-        question_text: 'Why is it beneficial to include a variety of fruits and vegetables in your diet?',
-        question_type: 'single_choice',
-        question_image: null,
-        marks: 5,
-        required: true,
-        question_order: 12,
-        options: [
-          { id: 'nq-12-a', question_id: 'nq-12', option_text: 'They provide a range of nutrients', option_image: null, is_correct: true, option_order: 1 },
-          { id: 'nq-12-b', question_id: 'nq-12', option_text: 'They eliminate the need for water', option_image: null, is_correct: false, option_order: 2 },
-          { id: 'nq-12-c', question_id: 'nq-12', option_text: 'They replace all other food groups', option_image: null, is_correct: false, option_order: 3 },
-          { id: 'nq-12-d', question_id: 'nq-12', option_text: 'They contain only carbohydrates', option_image: null, is_correct: false, option_order: 4 }
-        ]
-      }
-    ]
-  }
-];
+import { createQaFixtureQuiz, QA_QUIZ_ID } from './fixtures/qa-fixture';
 
-export const mockSubmissions: Submission[] = [
-  {
-    id: 'sub-demo-1',
-    quiz_id: 'quiz-nutrition-week-2026',
-    participant_name: 'Rahul Naik',
-    participant_email: 'rahul.naik@rotaract.org',
-    participant_data: {
-      club_name: 'Rotaract Club of Mapusa',
-      district_number: '3170',
-      position: 'President'
-    },
-    score: 60,
-    submitted_at: new Date(Date.now() - 3600000 * 2).toISOString()
-  },
-  {
-    id: 'sub-demo-2',
-    quiz_id: 'quiz-nutrition-week-2026',
-    participant_name: 'Sarah Chen',
-    participant_email: 'sarah.c@rotaract.org',
-    participant_data: {
-      club_name: 'Rotaract Club of Panaji',
-      district_number: '3170',
-      position: 'Member'
-    },
-    score: 55,
-    submitted_at: new Date(Date.now() - 3600000 * 4).toISOString()
+export const mockQuizzes: Quiz[] = [];
+
+export const mockSubmissions: Submission[] = [];
+
+export interface MockAttempt {
+  id: string;
+  quiz_id: string;
+  session_token: string;
+  participant_name: string;
+  participant_email?: string | null;
+  participant_data?: Record<string, any> | null;
+  started_at: string;
+  expires_at: string | null;
+  submitted_at: string | null;
+  status: 'started' | 'in_progress' | 'submitted' | 'auto_submitted' | 'expired' | 'abandoned';
+}
+
+const STORE_FILE = '/tmp/quizmania-local-store.json';
+
+function getNodeFs(): any {
+  if (typeof window !== 'undefined') return null;
+  try {
+    const req = typeof (globalThis as any).__non_webpack_require__ !== 'undefined'
+      ? (globalThis as any).__non_webpack_require__
+      : eval('require');
+    return req('fs');
+  } catch {
+    return null;
   }
-];
+}
+
+function readStoreFile(): { quizzes?: Quiz[]; themes?: Theme[]; submissions?: Submission[]; attempts?: MockAttempt[]; answers?: Answer[] } | null {
+  const fs = getNodeFs();
+  if (!fs) return null;
+  try {
+    if (fs.existsSync(STORE_FILE)) {
+      const content = fs.readFileSync(STORE_FILE, 'utf8');
+      return JSON.parse(content);
+    }
+  } catch {
+    // fallback to in-memory
+  }
+  return null;
+}
+
+function writeStoreFile(data: { quizzes: Quiz[]; themes: Theme[]; submissions: Submission[]; attempts: MockAttempt[]; answers?: Answer[] }) {
+  const fs = getNodeFs();
+  if (!fs) return;
+  try {
+    fs.writeFileSync(STORE_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch {
+    // ignore
+  }
+}
 
 class MockStore {
-  quizzes: Quiz[] = JSON.parse(JSON.stringify(mockQuizzes));
+  quizzes: Quiz[] = [];
   themes: Theme[] = JSON.parse(JSON.stringify(mockThemes));
-  submissions: Submission[] = JSON.parse(JSON.stringify(mockSubmissions));
+  submissions: Submission[] = [];
+  attempts: MockAttempt[] = [];
+  answers: Answer[] = [];
+
+  constructor() {
+    this.syncFromDisk();
+  }
+
+  syncFromDisk() {
+    const data = readStoreFile();
+    if (data) {
+      if (Array.isArray(data.quizzes)) this.quizzes = data.quizzes;
+      if (Array.isArray(data.themes) && data.themes.length > 0) this.themes = data.themes;
+      if (Array.isArray(data.submissions)) this.submissions = data.submissions;
+      if (Array.isArray(data.attempts)) this.attempts = data.attempts;
+      if (Array.isArray(data.answers)) this.answers = data.answers;
+    } else {
+      this.syncToDisk();
+    }
+  }
+
+  syncToDisk() {
+    writeStoreFile({
+      quizzes: this.quizzes,
+      themes: this.themes,
+      submissions: this.submissions,
+      attempts: this.attempts,
+      answers: this.answers
+    });
+  }
+
+  createAttempt(attempt: MockAttempt): MockAttempt {
+    this.syncFromDisk();
+    this.attempts.push(attempt);
+    this.syncToDisk();
+    return attempt;
+  }
+
+  getAttemptByToken(token: string): MockAttempt | undefined {
+    this.syncFromDisk();
+    return this.attempts.find(a => a.session_token === token);
+  }
+
+  updateAttemptStatus(token: string, status: MockAttempt['status'], submittedAt?: string): void {
+    this.syncFromDisk();
+    const attempt = this.attempts.find(a => a.session_token === token);
+    if (attempt) {
+      attempt.status = status;
+      if (submittedAt) attempt.submitted_at = submittedAt;
+      this.syncToDisk();
+    }
+  }
 
   getQuizzes(): Quiz[] {
-    return this.quizzes;
+    this.syncFromDisk();
+    return JSON.parse(JSON.stringify(this.quizzes));
   }
 
   getQuizById(id: string): Quiz | undefined {
-    return this.quizzes.find(q => q.id === id);
+    this.syncFromDisk();
+    const found = this.quizzes.find(q => q.id === id);
+    return found ? JSON.parse(JSON.stringify(found)) : undefined;
   }
 
   getQuizBySlug(slug: string): Quiz | undefined {
-    return this.quizzes.find(q => q.slug === slug);
+    this.syncFromDisk();
+    const found = this.quizzes.find(q => q.slug === slug);
+    return found ? JSON.parse(JSON.stringify(found)) : undefined;
   }
 
   saveQuiz(quiz: Quiz): Quiz {
+    this.syncFromDisk();
+    const quizId = quiz.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `quiz-${Date.now()}`);
+    const processedQuestions = quiz.questions?.map((q, qIdx) => {
+      const qId = q.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `q-${quizId}-${qIdx + 1}`);
+      return {
+        ...q,
+        id: qId,
+        quiz_id: quizId,
+        question_order: q.question_order ?? (qIdx + 1),
+        options: (q.options || []).map((opt, optIdx) => ({
+          ...opt,
+          id: opt.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `opt-${qId}-${optIdx + 1}`),
+          question_id: qId,
+          option_order: opt.option_order ?? (optIdx + 1)
+        }))
+      };
+    });
+
+    const processedSections = quiz.sections?.map((s, sIdx) => ({
+      ...s,
+      id: s.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sec-${quizId}-${sIdx + 1}`),
+      quiz_id: quizId,
+      section_order: s.section_order ?? (sIdx + 1)
+    }));
+
     const existingIndex = this.quizzes.findIndex(q => q.id === quiz.id || q.slug === quiz.slug);
     if (existingIndex >= 0) {
-      this.quizzes[existingIndex] = { ...this.quizzes[existingIndex], ...quiz, updated_at: new Date().toISOString() };
-      return this.quizzes[existingIndex];
+      this.quizzes[existingIndex] = {
+        ...this.quizzes[existingIndex],
+        ...quiz,
+        id: this.quizzes[existingIndex].id,
+        questions: processedQuestions ?? this.quizzes[existingIndex].questions,
+        sections: processedSections ?? this.quizzes[existingIndex].sections,
+        updated_at: new Date().toISOString()
+      };
+      this.syncToDisk();
+      return JSON.parse(JSON.stringify(this.quizzes[existingIndex]));
     }
+
     const newQuiz: Quiz = {
       ...quiz,
-      id: quiz.id || `quiz-${Date.now()}`,
+      id: quizId,
+      questions: processedQuestions ?? [],
+      sections: processedSections ?? [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
     this.quizzes.unshift(newQuiz);
-    return newQuiz;
+    this.syncToDisk();
+    return JSON.parse(JSON.stringify(newQuiz));
   }
 
   updateQuizStatus(id: string, status: Quiz['status']): Quiz | undefined {
-    const quiz = this.getQuizById(id);
+    this.syncFromDisk();
+    const quiz = this.quizzes.find(q => q.id === id);
     if (quiz) {
       quiz.status = status;
       quiz.updated_at = new Date().toISOString();
+      this.syncToDisk();
     }
     return quiz;
   }
 
   deleteQuiz(id: string): boolean {
+    this.syncFromDisk();
     const initialLen = this.quizzes.length;
     this.quizzes = this.quizzes.filter(q => q.id !== id);
-    return this.quizzes.length < initialLen;
+    this.submissions = this.submissions.filter(s => s.quiz_id !== id);
+    this.attempts = this.attempts.filter(a => a.quiz_id !== id);
+    const deleted = this.quizzes.length < initialLen;
+    if (deleted) {
+      this.syncToDisk();
+    }
+    return deleted;
   }
 
   getThemes(): Theme[] {
@@ -358,16 +269,94 @@ class MockStore {
     return newTheme;
   }
 
-  addSubmission(submission: Submission): Submission {
+  addSubmission(submission: Submission, answers?: Answer[]): Submission {
+    this.syncFromDisk();
     this.submissions.unshift(submission);
+    if (answers && answers.length > 0) {
+      this.answers.unshift(...answers);
+    }
+    this.syncToDisk();
     return submission;
   }
 
+  getSubmissionById(id: string): Submission | undefined {
+    this.syncFromDisk();
+    return this.submissions.find(s => s.id === id);
+  }
+
   getSubmissions(quizId?: string): Submission[] {
+    this.syncFromDisk();
     if (quizId) {
       return this.submissions.filter(s => s.quiz_id === quizId);
     }
     return this.submissions;
+  }
+
+  getAnswers(submissionId: string): Answer[] {
+    this.syncFromDisk();
+    return this.answers.filter(a => a.submission_id === submissionId);
+  }
+
+  updateAnswerMarks(submissionId: string, questionId: string, earnedMarks: number): { success: boolean; newScore: number; newPercentage: number } {
+    this.syncFromDisk();
+    const ansIndex = this.answers.findIndex(a => a.submission_id === submissionId && a.question_id === questionId);
+    if (ansIndex >= 0) {
+      this.answers[ansIndex].earned_marks = earnedMarks;
+    }
+
+    const subIndex = this.submissions.findIndex(s => s.id === submissionId);
+    if (subIndex < 0) {
+      return { success: false, newScore: 0, newPercentage: 0 };
+    }
+
+    // Recompute total earned marks from all answers of this submission
+    const subAnswers = this.answers.filter(a => a.submission_id === submissionId);
+    let totalScore = 0;
+    for (const a of subAnswers) {
+      totalScore += Number(a.earned_marks) || 0;
+    }
+
+    const sub = this.submissions[subIndex];
+    const totalPossible = sub.total_possible_marks || 1;
+    const newPercentage = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
+    
+    // Check passing status
+    const quiz = this.quizzes.find(q => q.id === sub.quiz_id);
+    const passingPercentage = quiz?.settings?.passing_score_percentage ?? 50;
+    const passed = newPercentage >= passingPercentage;
+
+    this.submissions[subIndex] = {
+      ...sub,
+      score: totalScore,
+      percentage: newPercentage,
+      passed
+    };
+
+    this.syncToDisk();
+    return { success: true, newScore: totalScore, newPercentage };
+  }
+
+  loadQaFixture(): Quiz {
+    const fixture = createQaFixtureQuiz();
+    const idx = this.quizzes.findIndex(q => q.id === QA_QUIZ_ID);
+    if (idx >= 0) {
+      this.quizzes[idx] = JSON.parse(JSON.stringify(fixture));
+    } else {
+      this.quizzes.unshift(JSON.parse(JSON.stringify(fixture)));
+    }
+    return fixture;
+  }
+
+  resetQaData(): { resetSubmissions: number; resetAttempts: number } {
+    const prevSubs = this.submissions.length;
+    const prevAttempts = this.attempts.length;
+    this.submissions = this.submissions.filter(s => s.quiz_id !== QA_QUIZ_ID);
+    this.attempts = this.attempts.filter(a => a.quiz_id !== QA_QUIZ_ID);
+    this.loadQaFixture();
+    return {
+      resetSubmissions: prevSubs - this.submissions.length,
+      resetAttempts: prevAttempts - this.attempts.length
+    };
   }
 }
 

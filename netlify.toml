@@ -4,11 +4,11 @@
 
 [build]
   base = "."
-  command = "npm run build --workspace=@quizmania/public"
+  command = "npm run build:public && (test -d .next || ln -s apps/public/.next .next)"
   publish = "apps/public/.next"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
