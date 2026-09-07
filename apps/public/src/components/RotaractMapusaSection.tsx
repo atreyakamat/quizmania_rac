@@ -103,9 +103,8 @@ export function RotaractMapusaSection() {
                   <span>Sponsored by Rotary Club of Mapusa</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-[#24141C] font-semibold bg-white px-3 py-1.5 rounded-xl border border-[#F0E1E8]">
-                  <span>Crafted by</span>
-                  <span className="text-[#A50D52] font-bold">Atreya</span>
-                  <span>& Mapusa Rotaract</span>
+                  <span className="text-[#A50D52] font-bold">Rotary International</span>
+                  <span>District 3170</span>
                 </div>
               </div>
             </div>

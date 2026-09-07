@@ -5,7 +5,6 @@ import { QuizCard } from '@/components/QuizCard';
 import { AboutSection } from '@/components/AboutSection';
 import { HowItWorksSection } from '@/components/HowItWorksSection';
 import { RotaractMapusaSection } from '@/components/RotaractMapusaSection';
-import { CreatorSection } from '@/components/CreatorSection';
 import { getPublishedQuizzesList } from '@quizmania/shared';
 import { ArrowRight, Sparkles, HelpCircle, PlusCircle, ExternalLink } from 'lucide-react';
 
@@ -93,9 +92,6 @@ export default async function QuizManiaLandingPage() {
 
       {/* 5. Rotaract Club of Mapusa Section */}
       <RotaractMapusaSection />
-
-      {/* 6. Creator Section (Atreya Kamat) */}
-      <CreatorSection />
     </div>
   );
 }

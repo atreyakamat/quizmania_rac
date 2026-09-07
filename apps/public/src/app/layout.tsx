@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     default: 'QuizMania — Rotaract Club of Mapusa',
     template: '%s | QuizMania — Rotaract Club of Mapusa'
   },
-  description: 'Think Fast. Learn More. Compete Together. Official high-performance interactive quiz and competition platform hosted by Rotaract Club of Mapusa (RI District 3170). Designed & built by Atreya Kamat.',
+  description: 'Think Fast. Learn More. Compete Together. Official high-performance interactive quiz and competition platform hosted by Rotaract Club of Mapusa (RI District 3170).',
   applicationName: 'QuizMania',
   category: 'Education & Competitions',
   keywords: [
@@ -27,15 +27,13 @@ export const metadata: Metadata = {
     'Goa Quizzes',
     'Online Quiz Goa',
     'Student Competitions Goa',
-    'Atreya Kamat',
     'Knowledge Bowl',
     'Interactive Quiz Platform'
   ],
   authors: [
-    { name: 'Atreya Kamat', url: 'https://atreyakamat.dev' },
     { name: 'Rotaract Club of Mapusa', url: 'https://quizmania.atreyakamat.dev' }
   ],
-  creator: 'Atreya Kamat',
+  creator: 'Rotaract Club of Mapusa',
   publisher: 'Rotaract Club of Mapusa',
   alternates: {
     canonical: 'https://quizmania.atreyakamat.dev'
@@ -63,8 +61,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'QuizMania — Rotaract Club of Mapusa',
     description: 'Think Fast. Learn More. Compete Together. Official interactive quiz platform by Rotaract Club of Mapusa (RI District 3170).',
-    images: ['/branding/quizmania.png'],
-    creator: '@atreyakamat'
+    images: ['/branding/quizmania.png']
   },
   robots: {
     index: true,
@@ -116,9 +113,9 @@ const jsonLdData = {
         priceCurrency: 'INR'
       },
       creator: {
-        '@type': 'Person',
-        name: 'Atreya Kamat',
-        url: 'https://atreyakamat.dev'
+        '@type': 'Organization',
+        name: 'Rotaract Club of Mapusa',
+        url: 'https://quizmania.atreyakamat.dev'
       },
       publisher: {
         '@id': 'https://quizmania.atreyakamat.dev/#organization'

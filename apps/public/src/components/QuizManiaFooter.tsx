@@ -81,22 +81,22 @@ export function QuizManiaFooter() {
             </ul>
           </div>
 
-          {/* Creator & Club Attribution */}
+          {/* Club Info */}
           <div className="md:col-span-3 space-y-3">
             <span className="text-xs font-bold uppercase tracking-wider text-[#D83B70]">
-              Development
+              About The Club
             </span>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Built with precision for seamless community engagement, mobile responsiveness, and fair scoring.
+              Rotaract Club of Mapusa brings together young adults to exchange ideas, develop leadership skills, and have fun through service.
             </p>
             <div className="pt-2">
               <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1">
                 <div className="flex items-center gap-1.5 text-xs text-[#F3D6E1] font-semibold">
-                  <Heart className="w-3.5 h-3.5 text-[#D83B70] fill-current" />
-                  <span>Built by Atreya</span>
+                  <Award className="w-3.5 h-3.5 text-[#D83B70]" />
+                  <span>RI Citation Awardee</span>
                 </div>
                 <span className="text-[11px] text-slate-400 block">
-                  For Rotaract Club of Mapusa
+                  Rotary International District 3170
                 </span>
               </div>
             </div>
@@ -109,8 +109,8 @@ export function QuizManiaFooter() {
             © 2026 QuizMania • Rotaract Club of Mapusa. All rights reserved.
           </div>
           <div className="flex items-center gap-1 text-[11px] text-slate-400">
-            <span>Designed & Developed by</span>
-            <span className="text-[#F3D6E1] font-semibold">Atreya</span>
+            <span>Official Platform of</span>
+            <span className="text-[#F3D6E1] font-semibold">Rotaract Club of Mapusa</span>
           </div>
         </div>
       </div>

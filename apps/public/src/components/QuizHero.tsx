@@ -36,8 +36,8 @@ export function QuizHero() {
                 </span>
               </div>
               <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F3D6E1]/50 border border-[#D83B70]/20 text-[11px] font-semibold text-[#A50D52]">
-                <Heart className="w-3 h-3 text-[#D83B70] fill-current" />
-                <span>Built by Atreya</span>
+                <Sparkles className="w-3 h-3 text-[#D83B70]" />
+                <span>Interactive Knowledge Platform</span>
               </div>
             </div>
 
