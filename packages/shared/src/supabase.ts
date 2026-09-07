@@ -22,19 +22,20 @@ export function getSupabaseAnonKey(): string {
   return DEFAULT_SUPABASE_ANON_KEY;
 }
 
-const DEFAULT_SUPABASE_SERVICE_KEY = typeof window === 'undefined'
-  ? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhcW13dnhnZ255cHJsZXRwa2xyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODUwODI5OCwiZXhwIjoyMTA0MDg0Mjk4fQ.3gryBsb9aF0AChsXCUVw71wjquFxZUCPDsMLnfwKIpE'
-  : null;
-
 export function getSupabaseServiceKey(): string | null {
   if (typeof window !== 'undefined') {
     return null;
   }
   const envKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (envKey && !envKey.includes('placeholder')) {
+  if (
+    envKey &&
+    !envKey.includes('placeholder') &&
+    !envKey.includes('your-service-role') &&
+    !envKey.includes('your_service_role')
+  ) {
     return envKey;
   }
-  return DEFAULT_SUPABASE_SERVICE_KEY;
+  return null;
 }
 
 export function isSupabaseConfigured(): boolean {
