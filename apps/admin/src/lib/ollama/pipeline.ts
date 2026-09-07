@@ -58,6 +58,19 @@ function isGenericTitle(title?: string): boolean {
   );
 }
 
+function isUnavailableError(err: string): boolean {
+  const lower = err.toLowerCase();
+  return (
+    lower.includes('connect') ||
+    lower.includes('timed out') ||
+    lower.includes('timeout') ||
+    lower.includes('unavailable') ||
+    lower.includes('econnrefused') ||
+    lower.includes('fetch failed') ||
+    lower.includes('abort')
+  );
+}
+
 /**
  * Executes a single chunk with retry logic (retry once on malformed response).
  */
@@ -115,7 +128,11 @@ async function processChunkWithRetry(
     }
   }
 
-  throw new Error(`AI generation failed for question batch ${chunkIndex} of ${totalChunks}. Please retry. (${lastError})`);
+  if (isUnavailableError(lastError)) {
+    throw new Error('Ollama is unavailable. Make sure Ollama is running and the configured model is installed.');
+  }
+
+  throw new Error('AI returned invalid quiz JSON. Please try again or edit the input.');
 }
 
 /**
@@ -210,7 +227,8 @@ export function mergeChunkResults(
  * High-level orchestration pipeline for Ollama Quiz Generation.
  */
 export async function runQuizGenerationPipeline(
-  params: QuizGenerationPipelineInput
+  params: QuizGenerationPipelineInput,
+  configOverride?: OllamaConfig
 ): Promise<QuizGenerationPipelineResult> {
   const rawContent = params.input.trim();
   if (!rawContent) {
@@ -221,11 +239,11 @@ export async function runQuizGenerationPipeline(
     };
   }
 
-  const config = getDefaultOllamaConfig();
+  const config = configOverride || getDefaultOllamaConfig();
   if (!config.enabled) {
     return {
       success: false,
-      error: 'AI generation is currently disabled. Set OLLAMA_ENABLED=true in apps/admin/.env.local and ensure Ollama is running.',
+      error: 'Ollama AI generation is currently disabled.',
       stage: 'disabled'
     };
   }
@@ -281,9 +299,13 @@ export async function runQuizGenerationPipeline(
       );
       chunkResults.push(result);
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : '';
+      const isUnavailable = isUnavailableError(errMsg);
       return {
         success: false,
-        error: err instanceof Error ? err.message : `AI generation failed on batch ${chunkIndex}`,
+        error: isUnavailable
+          ? 'Ollama is unavailable. Make sure Ollama is running and the configured model is installed.'
+          : 'AI returned invalid quiz JSON. Please try again or edit the input.',
         stage: 'ollama_call',
         chunksCount: chunks.length
       };
@@ -298,7 +320,7 @@ export async function runQuizGenerationPipeline(
   if (!validation.success || !validation.data) {
     return {
       success: false,
-      error: 'Generated JSON failed QuizMania schema validation.',
+      error: 'AI returned invalid quiz JSON. Please try again or edit the input.',
       validationErrors: validation.errors,
       data: mergedQuizObj,
       json: JSON.stringify(mergedQuizObj, null, 2),
@@ -311,7 +333,7 @@ export async function runQuizGenerationPipeline(
   if (!conversion.success || !conversion.quiz) {
     return {
       success: false,
-      error: 'Failed to normalize generated quiz into internal Quiz format.',
+      error: 'AI returned invalid quiz JSON. Please try again or edit the input.',
       validationErrors: conversion.errors,
       json: JSON.stringify(mergedQuizObj, null, 2),
       stage: 'convert'
@@ -328,3 +350,6 @@ export async function runQuizGenerationPipeline(
     chunksCount: chunks.length
   };
 }
+
+export const executeQuizGenerationPipeline = runQuizGenerationPipeline;
+

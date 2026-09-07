@@ -27,6 +27,18 @@ import {
   ExternalLink
 } from 'lucide-react';
 
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+function makeUuid(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
 interface QuizEditorProps {
   initialQuiz?: Quiz;
   availableThemes?: Theme[];
@@ -36,7 +48,7 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
   const router = useRouter();
 
   const [quiz, setQuiz] = useState<Quiz>(initialQuiz || {
-    id: `quiz-${Date.now()}`,
+    id: makeUuid(),
     title: '',
     slug: '',
     description: '',
@@ -87,18 +99,19 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
   const handleAddQuestion = () => {
     const questions = quiz.questions || [];
     const qNumber = questions.length + 1;
+    const qId = makeUuid();
     const newQ: Question = {
-      id: `q-${Date.now()}-${qNumber}`,
+      id: qId,
       quiz_id: quiz.id,
       question_text: '',
       question_type: 'single_choice',
       question_image: null,
-      marks: 5,
+      marks: 1,
       required: true,
       question_order: qNumber,
       options: [
-        { id: `opt-${Date.now()}-1`, question_id: `q-${Date.now()}-${qNumber}`, option_text: '', option_image: null, is_correct: true, option_order: 1 },
-        { id: `opt-${Date.now()}-2`, question_id: `q-${Date.now()}-${qNumber}`, option_text: '', option_image: null, is_correct: false, option_order: 2 }
+        { id: makeUuid(), question_id: qId, option_text: '', option_image: null, is_correct: true, option_order: 1 },
+        { id: makeUuid(), question_id: qId, option_text: '', option_image: null, is_correct: false, option_order: 2 }
       ]
     };
     setQuiz(prev => ({ ...prev, questions: [...questions, newQ] }));
@@ -134,8 +147,13 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
         }
       }
 
+      const activeQuizId = prev.id && UUID_REGEX.test(prev.id)
+        ? prev.id
+        : (importedQuiz.id && UUID_REGEX.test(importedQuiz.id) ? importedQuiz.id : makeUuid());
+
       return {
         ...prev,
+        id: activeQuizId,
         title: importedQuiz.title || prev.title,
         slug: importedQuiz.slug || prev.slug,
         description: importedQuiz.description !== undefined ? importedQuiz.description : prev.description,
@@ -148,16 +166,21 @@ export function QuizEditor({ initialQuiz, availableThemes = [] }: QuizEditorProp
           ...importedQuiz.settings
         },
         sections: importedQuiz.sections && importedQuiz.sections.length > 0 ? importedQuiz.sections : prev.sections,
-        questions: (importedQuiz.questions || []).map((q, idx) => ({
-          ...q,
-          quiz_id: prev.id,
-          question_order: idx + 1,
-          options: (q.options || []).map((opt, oIdx) => ({
-            ...opt,
-            question_id: q.id,
-            option_order: oIdx + 1
-          }))
-        }))
+        questions: (importedQuiz.questions || []).map((q, idx) => {
+          const qId = q.id && UUID_REGEX.test(q.id) ? q.id : makeUuid();
+          return {
+            ...q,
+            id: qId,
+            quiz_id: activeQuizId,
+            question_order: idx + 1,
+            options: (q.options || []).map((opt, oIdx) => ({
+              ...opt,
+              id: opt.id && UUID_REGEX.test(opt.id) ? opt.id : makeUuid(),
+              question_id: qId,
+              option_order: oIdx + 1
+            }))
+          };
+        })
       };
     });
 

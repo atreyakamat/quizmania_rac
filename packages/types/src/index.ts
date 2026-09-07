@@ -373,6 +373,7 @@ export interface QuizJsonImportSection {
 }
 
 export interface QuizJsonImportFormat {
+  id?: string;
   version?: string;
   title: string;
   slug?: string;

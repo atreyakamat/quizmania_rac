@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import type { Quiz } from '@quizmania/types';
-import type { ImportSummary } from '@quizmania/quiz-schema';
+import { convertQuizJsonToQuiz, type ImportSummary } from '@quizmania/quiz-schema';
 import {
   Sparkles,
   Loader2,
@@ -142,13 +142,17 @@ export function QuizAiGenerator({
           throw new Error('Incomplete response from AI generator.');
         }
 
-        setGeneratedJson(finalData.json || JSON.stringify(finalData.data, null, 2));
-        setGeneratedQuiz(finalData.quiz);
-        setGeneratedSummary(finalData.summary || {
-          questionsCount: finalData.questionCount || 0,
-          optionsCount: 0,
-          sectionsCount: 0
-        });
+        const rawQuiz = finalData.quiz || finalData.data;
+        const conv = convertQuizJsonToQuiz(rawQuiz, existingQuizId);
+        if (!conv.success || !conv.quiz || !conv.summary) {
+          throw new Error(conv.errors && conv.errors.length > 0 ? conv.errors[0] : 'Failed to parse generated quiz');
+        }
+
+        setGeneratedJson(finalData.json || JSON.stringify(rawQuiz, null, 2));
+        setGeneratedQuiz(conv.quiz);
+        setGeneratedSummary(conv.summary);
+        onImport(conv.quiz, conv.summary);
+        setImported(true);
       } else {
         const data = await res.json();
 
@@ -159,13 +163,17 @@ export function QuizAiGenerator({
           throw new Error(data.error || 'Failed to generate quiz with AI');
         }
 
-        setGeneratedJson(data.json || JSON.stringify(data.data, null, 2));
-        setGeneratedQuiz(data.quiz);
-        setGeneratedSummary(data.summary || {
-          questionsCount: data.questionCount || 0,
-          optionsCount: 0,
-          sectionsCount: 0
-        });
+        const rawQuiz = data.quiz || data.data;
+        const conv = convertQuizJsonToQuiz(rawQuiz, existingQuizId);
+        if (!conv.success || !conv.quiz || !conv.summary) {
+          throw new Error(conv.errors && conv.errors.length > 0 ? conv.errors[0] : 'Failed to parse generated quiz');
+        }
+
+        setGeneratedJson(data.json || JSON.stringify(rawQuiz, null, 2));
+        setGeneratedQuiz(conv.quiz);
+        setGeneratedSummary(conv.summary);
+        onImport(conv.quiz, conv.summary);
+        setImported(true);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error during AI generation');

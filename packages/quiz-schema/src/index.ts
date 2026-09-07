@@ -339,6 +339,7 @@ export const quizJsonImportSectionSchema = z.object({
 });
 
 export const quizJsonImportSchema = z.object({
+  id: z.string().optional(),
   version: z.string().optional(),
   title: z.string().min(1, 'Quiz title is required'),
   slug: z.string().optional(),
@@ -572,6 +573,23 @@ export interface ImportSummary {
   sectionsCount: number;
 }
 
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+export function generateCanonicalUuid(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+export function isCanonicalUuid(id?: string | null): boolean {
+  return Boolean(id && UUID_REGEX.test(id));
+}
+
 /**
  * Validates and converts JSON import data directly into QuizMania's internal Quiz model
  */
@@ -593,7 +611,11 @@ export function convertQuizJsonToQuiz(
   }
 
   const data = validation.data;
-  const quizId = existingQuizId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `quiz-${Date.now()}`);
+  const quizId = (existingQuizId && isCanonicalUuid(existingQuizId))
+    ? existingQuizId
+    : (data.id && isCanonicalUuid(String(data.id)))
+      ? String(data.id)
+      : generateCanonicalUuid();
   const slug = data.slug?.trim() ? generateSlug(data.slug) : generateSlug(data.title);
 
   // Parse Sections if any
@@ -602,12 +624,13 @@ export function convertQuizJsonToQuiz(
   if (Array.isArray(data.sections)) {
     data.sections.forEach((sec: any, secIdx: number) => {
       const secTitle = sec.title || `Section ${secIdx + 1}`;
+      const secId = (sec.id && isCanonicalUuid(String(sec.id))) ? String(sec.id) : generateCanonicalUuid();
       sections.push({
-        id: (sec.id && typeof sec.id === 'string' && sec.id.length > 20) ? sec.id : `sec-${Date.now()}-${secIdx + 1}`,
+        id: secId,
         quiz_id: quizId,
         title: secTitle,
         description: sec.description || null,
-        section_order: secIdx + 1
+        section_order: sec.section_order ?? (secIdx + 1)
       });
       if (Array.isArray(sec.questions)) {
         sec.questions.forEach((qRef: any) => {
@@ -647,7 +670,7 @@ export function convertQuizJsonToQuiz(
   // Parse Questions
   const questions: Question[] = (data.questions || []).map((q: any, qIdx: number) => {
     const qNumber = qIdx + 1;
-    const questionId = `q-${Date.now()}-${qNumber}`;
+    const questionId = (q.id && isCanonicalUuid(String(q.id))) ? String(q.id) : generateCanonicalUuid();
     const logicalId = q.id !== undefined && q.id !== null ? String(q.id) : String(qNumber);
     const assignedSectionTitle = q.section_title || questionToSectionTitle.get(logicalId) || null;
 
@@ -661,7 +684,7 @@ export function convertQuizJsonToQuiz(
     if (qType === 'true_false') {
       if (Array.isArray(q.options) && q.options.length === 2) {
         questionOptions = q.options.map((opt: any, optIdx: number) => ({
-          id: `opt-${Date.now()}-${qNumber}-${optIdx + 1}`,
+          id: (opt.id && isCanonicalUuid(String(opt.id))) ? String(opt.id) : generateCanonicalUuid(),
           question_id: questionId,
           option_text: opt.text ?? opt.option_text ?? (optIdx === 0 ? 'True' : 'False'),
           option_image: opt.image ?? opt.option_image ?? null,
@@ -670,13 +693,13 @@ export function convertQuizJsonToQuiz(
         }));
       } else {
         questionOptions = [
-          { id: `opt-${Date.now()}-${qNumber}-1`, question_id: questionId, option_text: 'True', option_image: null, is_correct: true, option_order: 1 },
-          { id: `opt-${Date.now()}-${qNumber}-2`, question_id: questionId, option_text: 'False', option_image: null, is_correct: false, option_order: 2 }
+          { id: generateCanonicalUuid(), question_id: questionId, option_text: 'True', option_image: null, is_correct: true, option_order: 1 },
+          { id: generateCanonicalUuid(), question_id: questionId, option_text: 'False', option_image: null, is_correct: false, option_order: 2 }
         ];
       }
     } else if (qType === 'single_choice' || qType === 'multiple_choice') {
       questionOptions = (q.options || []).map((opt: any, optIdx: number) => ({
-        id: `opt-${Date.now()}-${qNumber}-${optIdx + 1}`,
+        id: (opt.id && isCanonicalUuid(String(opt.id))) ? String(opt.id) : generateCanonicalUuid(),
         question_id: questionId,
         option_text: opt.text ?? opt.option_text ?? '',
         option_image: opt.image ?? opt.option_image ?? null,

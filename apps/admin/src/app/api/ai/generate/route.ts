@@ -79,14 +79,24 @@ export async function POST(req: NextRequest) {
 
     if (!result.success) {
       const status = result.stage === 'validate' || result.stage === 'convert' ? 422 : 500;
-      return NextResponse.json(result, { status });
+      return NextResponse.json({
+        success: false,
+        error: result.error || 'Failed to generate quiz with AI',
+        validationErrors: result.validationErrors
+      }, { status });
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      success: true,
+      quiz: result.data || result.quiz,
+      summary: result.summary,
+      json: result.json,
+      questionCount: result.questionCount
+    });
   } catch (err) {
     return NextResponse.json({
       success: false,
-      error: err instanceof Error ? err.message : 'Unexpected server error'
+      error: 'Unexpected server error'
     }, { status: 500 });
   }
 }

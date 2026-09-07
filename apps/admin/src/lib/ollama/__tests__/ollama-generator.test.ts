@@ -88,6 +88,11 @@ Let me know if you need anything else!`;
   assert(extracted3 !== null, 'Conversational response extracted');
   assertEqual(JSON.parse(extracted3!).title, 'Conversational Quiz', 'Extracted JSON parses with correct title');
 
+  // 2d. Plain text without JSON returns null
+  const plainTextResponse = 'I apologize, but I cannot generate a quiz from that text.';
+  const extracted4 = extractJsonFromOllamaResponse(plainTextResponse);
+  assert(extracted4 === null, 'Plain text with no JSON returns null');
+
   // 3. End-to-end simulated AI conversion of the 3 sample questions
   console.log('\n3. Testing End-to-End Normalization for Example Input:');
   const simulatedAiOutput = `{
@@ -220,6 +225,26 @@ Let me know if you need anything else!`;
   assertEqual(deterministicMerged.sections.length, 2, 'Both sections merged');
   assertEqual(deterministicMerged.settings.timeLimitMinutes, 20, 'Settings timeLimitMinutes preserved');
   assertEqual(deterministicMerged.settings.passingScorePercentage, 70, 'Settings passingScorePercentage preserved');
+
+  // 6. Testing Pipeline Error Contracts
+  console.log('\n6. Testing Pipeline Error Contracts:');
+  const { executeQuizGenerationPipeline } = await import('../pipeline');
+
+  // Test 6a: Disabled error contract
+  const resDisabled = await executeQuizGenerationPipeline(
+    { input: '1. What is 2+2?' },
+    { baseUrl: 'http://localhost:11434', model: 'llama3.2:3b', timeoutMs: 1000, enabled: false }
+  );
+  assertEqual(resDisabled.success, false, 'Pipeline returns success false when disabled');
+  assertEqual(resDisabled.error, 'Ollama AI generation is currently disabled.', 'Error message when disabled matches contract');
+
+  // Test 6b: Unavailable error contract (non-existent port)
+  const resUnavailable = await executeQuizGenerationPipeline(
+    { input: '1. What is 2+2?' },
+    { baseUrl: 'http://127.0.0.1:59999', model: 'llama3.2:3b', timeoutMs: 500, enabled: true }
+  );
+  assertEqual(resUnavailable.success, false, 'Pipeline returns success false when unreachable');
+  assertEqual(resUnavailable.error, 'Ollama is unavailable. Make sure Ollama is running and the configured model is installed.', 'Error message when unreachable matches contract');
 
   console.log('\n----------------------------------------');
   console.log(`Results: ${passed} passed, ${failed} failed`);

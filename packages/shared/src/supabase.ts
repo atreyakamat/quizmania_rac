@@ -116,6 +116,9 @@ let dbReadyCache: { ready: boolean; timestamp: number } | null = null;
  * Verifies that Supabase is both configured and has the required database schema (public.quizzes table) available.
  */
 export async function isSupabaseDatabaseReady(): Promise<boolean> {
+  if (process.env.FORCE_MOCK_STORE === 'true') {
+    return false;
+  }
   if (!isSupabaseAdminConfigured() && !isSupabaseConfigured()) {
     return false;
   }

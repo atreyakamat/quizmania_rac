@@ -308,6 +308,8 @@ export async function setQuizStatus(id: string, status: QuizStatus): Promise<Qui
   return mockStore.updateQuizStatus(id, status) || null;
 }
 
+export const updateQuizStatus = setQuizStatus;
+
 export async function deleteQuiz(id: string): Promise<boolean> {
   const isLive = await isSupabaseDatabaseReady();
   if (isLive) {
@@ -440,7 +442,14 @@ export async function exportQuizToJson(quizId: string): Promise<QuizJsonImportFo
       fontFamily: quiz.theme.font_family
     } : undefined,
     coverImage: quiz.cover_image,
+    instructions: quiz.instructions,
     settings: quiz.settings,
+    sections: quiz.sections && quiz.sections.length > 0 ? quiz.sections.map(s => ({
+      id: s.id,
+      title: s.title,
+      description: s.description,
+      section_order: s.section_order
+    })) : undefined,
     questions: (quiz.questions || []).map(q => ({
       id: q.id,
       question: q.question_text,

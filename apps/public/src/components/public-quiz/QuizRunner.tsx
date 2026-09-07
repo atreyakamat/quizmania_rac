@@ -67,6 +67,7 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
   const [secondsRemaining, setSecondsRemaining] = useState<number | null>(
     totalDurationMinutes ? totalDurationMinutes * 60 : null
   );
+  const [serverExpiresAt, setServerExpiresAt] = useState<string | null>(null);
   const [timerExpired, setTimerExpired] = useState(false);
 
   const themeVars = getThemeCssVariables(quiz.theme) as React.CSSProperties;
@@ -140,6 +141,7 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
         setSessionToken(data.sessionToken);
         setAttemptId(data.attemptId);
         if (data.expiresAt) {
+           setServerExpiresAt(data.expiresAt);
            const expires = new Date(data.expiresAt).getTime();
            const now = Date.now();
            const remaining = Math.max(0, Math.floor((expires - now) / 1000));
@@ -176,6 +178,7 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
             
             // set timer
             if (savedState.expiresAt) {
+               setServerExpiresAt(savedState.expiresAt);
                const remaining = Math.max(0, Math.floor((new Date(savedState.expiresAt).getTime() - Date.now()) / 1000));
                setSecondsRemaining(remaining);
             }
@@ -194,11 +197,11 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
   useEffect(() => {
     if (!attemptId) return;
     
-    const saveState = { singleAnswers, multiAnswers, textAnswers, attemptId, sessionToken, expiresAt: secondsRemaining !== null ? new Date(Date.now() + secondsRemaining * 1000).toISOString() : null };
+    const saveState = { singleAnswers, multiAnswers, textAnswers, attemptId, sessionToken, expiresAt: serverExpiresAt };
     sessionStorage.setItem(`quiz_attempt_${attemptId}`, JSON.stringify(saveState));
     sessionStorage.setItem(`quiz_active_attempt_${quiz.id}`, attemptId);
 
-  }, [singleAnswers, multiAnswers, textAnswers, attemptId]);
+  }, [singleAnswers, multiAnswers, textAnswers, attemptId, serverExpiresAt]);
 
   // Option selection handlers
   const handleSelectSingleOption = (questionId: string, optionId: string) => {

@@ -8,6 +8,8 @@ import {
 } from '../index';
 import type { Quiz, QuizSubmissionPayload } from '@quizmania/types';
 
+process.env.FORCE_MOCK_STORE = 'true';
+
 export async function runResponseTests() {
   console.log('Running responses DAL tests...');
   let passed = 0;
