@@ -13,7 +13,7 @@ export function QuizManiaFooter() {
             <div className="flex items-center gap-3">
               <div className="relative w-11 h-11 rounded-2xl overflow-hidden bg-white/10 p-1 border border-[#D83B70]/30 shadow-md flex-shrink-0">
                 <Image
-                  src="/branding/quizmania-logo.png"
+                  src="/branding/quizmania.png"
                   alt="QuizMania Official Logo"
                   width={44}
                   height={44}

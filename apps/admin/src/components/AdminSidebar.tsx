@@ -23,7 +23,7 @@ export function AdminSidebar() {
       <div className="p-5 border-b border-[#301322] flex items-center gap-3">
         <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-white/10 p-1 border border-[#D83B70]/30 shadow-lg shadow-[#A50D52]/30 flex-shrink-0">
           <Image
-            src="/branding/quizmania-logo.png"
+            src="/branding/quizmania.png"
             alt="QuizMania Logo"
             width={40}
             height={40}

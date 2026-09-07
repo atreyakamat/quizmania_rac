@@ -17,8 +17,8 @@ export function RotaractMapusaSection() {
             <div className="lg:col-span-4 flex flex-col items-center text-center p-6 sm:p-8 rounded-2xl bg-white border border-[#F0E1E8] shadow-xs space-y-4">
               <div className="relative w-40 h-40 sm:w-48 sm:h-48 flex items-center justify-center">
                 <Image
-                  src="/branding/rotaract-mapusa-logo.png"
-                  alt="Rotaract Club of Mapusa Logo"
+                  src="/branding/quizmania.png"
+                  alt="QuizMania Official Branding"
                   width={192}
                   height={192}
                   className="max-h-full max-w-full object-contain drop-shadow-sm hover:scale-105 transition-transform duration-300"

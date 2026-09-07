@@ -26,7 +26,7 @@ export function QuizManiaLogo({
         }`}
       >
         <Image
-          src="/branding/quizmania-logo.png"
+          src="/branding/quizmania.png"
           alt="QuizMania Official Logo"
           width={pixelDimension}
           height={pixelDimension}

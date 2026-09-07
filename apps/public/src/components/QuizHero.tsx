@@ -24,7 +24,7 @@ export function QuizHero() {
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/95 backdrop-blur-md border border-[#F0E1E8] shadow-xs">
                 <div className="relative w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
                   <Image
-                    src="/branding/quizmania-logo.png"
+                    src="/branding/quizmania.png"
                     alt="QuizMania Official"
                     width={16}
                     height={16}
@@ -100,7 +100,7 @@ export function QuizHero() {
                 <div className="flex items-center gap-3">
                   <div className="relative w-10 h-10 rounded-2xl overflow-hidden bg-white p-1 border border-[#D83B70]/30 shadow-xs flex-shrink-0">
                     <Image
-                      src="/branding/quizmania-logo.png"
+                      src="/branding/quizmania.png"
                       alt="QuizMania Sample"
                       width={40}
                       height={40}

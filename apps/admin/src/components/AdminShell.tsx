@@ -16,7 +16,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-2.5">
           <div className="relative w-8 h-8 rounded-lg overflow-hidden bg-white/10 p-0.5 border border-[#D83B70]/30 flex-shrink-0">
             <Image
-              src="/branding/quizmania-logo.png"
+              src="/branding/quizmania.png"
               alt="QuizMania Logo"
               width={32}
               height={32}

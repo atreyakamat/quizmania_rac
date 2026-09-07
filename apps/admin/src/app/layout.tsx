@@ -6,8 +6,8 @@ export const metadata = {
   title: 'QuizMania Admin Studio - Rotaract Club of Mapusa',
   description: 'Private administration panel for QuizMania',
   icons: {
-    icon: '/branding/favicon-32x32.png',
-    shortcut: '/favicon.ico'
+    icon: '/branding/quizmania.png',
+    shortcut: '/branding/quizmania.png'
   }
 };
 

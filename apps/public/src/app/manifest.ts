@@ -11,19 +11,8 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#A50D52',
     icons: [
       {
-        src: '/branding/favicon-32x32.png',
-        sizes: '32x32',
-        type: 'image/png'
-      },
-      {
-        src: '/branding/quizmania-icon-192.png',
-        sizes: '192x192',
-        type: 'image/png',
-        purpose: 'maskable'
-      },
-      {
-        src: '/branding/quizmania-icon-512.png',
-        sizes: '512x512',
+        src: '/branding/quizmania.png',
+        sizes: 'any',
         type: 'image/png',
         purpose: 'any'
       }

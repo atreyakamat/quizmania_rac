@@ -41,16 +41,9 @@ export const metadata: Metadata = {
     canonical: 'https://quizmania.atreyakamat.dev'
   },
   icons: {
-    icon: [
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/branding/favicon-32x32.png', type: 'image/png', sizes: '32x32' },
-      { url: '/branding/favicon-16x16.png', type: 'image/png', sizes: '16x16' },
-      { url: '/branding/quizmania-logo.png', type: 'image/png', sizes: '512x512' }
-    ],
-    apple: [
-      { url: '/branding/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }
-    ],
-    shortcut: '/favicon.ico'
+    icon: '/branding/quizmania.png',
+    shortcut: '/branding/quizmania.png',
+    apple: '/branding/quizmania.png'
   },
   openGraph: {
     type: 'website',
@@ -61,9 +54,7 @@ export const metadata: Metadata = {
     description: 'Think Fast. Learn More. Compete Together. Interactive community competitions and educational quizzes hosted by Rotaract Club of Mapusa (RI District 3170).',
     images: [
       {
-        url: '/branding/quizmania-og.png',
-        width: 1200,
-        height: 630,
+        url: '/branding/quizmania.png',
         alt: 'QuizMania — Rotaract Club of Mapusa'
       }
     ]
@@ -72,7 +63,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'QuizMania — Rotaract Club of Mapusa',
     description: 'Think Fast. Learn More. Compete Together. Official interactive quiz platform by Rotaract Club of Mapusa (RI District 3170).',
-    images: ['/branding/quizmania-og.png'],
+    images: ['/branding/quizmania.png'],
     creator: '@atreyakamat'
   },
   robots: {
@@ -98,7 +89,7 @@ const jsonLdData = {
       url: 'https://quizmania.atreyakamat.dev',
       logo: {
         '@type': 'ImageObject',
-        url: 'https://quizmania.atreyakamat.dev/branding/rotaract-mapusa-logo.png'
+        url: 'https://quizmania.atreyakamat.dev/branding/quizmania.png'
       },
       address: {
         '@type': 'PostalAddress',

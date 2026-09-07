@@ -45,7 +45,7 @@ export function QuizCard({ quiz }: QuizCardProps) {
           <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#FAF8F9] via-[#F3D6E1]/20 to-[#A50D52]/5 p-6">
             <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-white/90 p-1.5 border border-[#D83B70]/20 shadow-xs mb-2 group-hover:scale-110 transition-transform">
               <Image
-                src="/branding/quizmania-logo.png"
+                src="/branding/quizmania.png"
                 alt="QuizMania Official"
                 width={56}
                 height={56}
