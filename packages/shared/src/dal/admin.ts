@@ -245,7 +245,14 @@ export async function saveQuiz(quiz: Partial<Quiz> & { title: string; slug: stri
           end_at: rawEndAt
         });
 
-      if (quizError && (quizError.message?.includes('start_at') || quizError.code === '42703')) {
+      if (
+        quizError &&
+        (quizError.message?.includes('start_at') ||
+         quizError.message?.includes('end_at') ||
+         quizError.message?.includes('schema cache') ||
+         quizError.code === '42703' ||
+         quizError.code === 'PGRST204')
+      ) {
         const fallback = await supabase
           .from('quizzes')
           .upsert(basePayload);
