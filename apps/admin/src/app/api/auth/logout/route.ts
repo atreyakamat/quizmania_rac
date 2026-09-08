@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import { ADMIN_COOKIE_NAME, verifyCsrfOrigin } from '@/lib/auth';
+import { clearSessionCookies, verifyCsrfOrigin } from '@/lib/auth';
+import { getSupabasePublicClient } from '@quizmania/shared';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  // CSRF Defense
+  // 1. CSRF Defense
   const csrf = verifyCsrfOrigin(request);
   if (!csrf.valid) {
     return NextResponse.json(
@@ -13,22 +14,21 @@ export async function POST(request: Request) {
     );
   }
 
+  // 2. Invalidate session upstream in Supabase Auth if accessible
+  try {
+    const supabase = getSupabasePublicClient();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+  } catch {
+    // Session cleanup continues even if upstream call fails
+  }
+
+  // 3. Clear all admin session cookies
   const response = NextResponse.json({
     success: true,
     message: 'Logged out successfully',
   });
 
-  // Clear session cookie
-  response.cookies.set({
-    name: ADMIN_COOKIE_NAME,
-    value: '',
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 0,
-    expires: new Date(0),
-  });
-
-  return response;
+  return clearSessionCookies(response);
 }

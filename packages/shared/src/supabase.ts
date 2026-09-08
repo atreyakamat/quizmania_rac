@@ -111,6 +111,33 @@ export function getSupabaseAdminClient(): SupabaseClient | null {
   return adminClientInstance;
 }
 
+/**
+ * Authenticated Supabase client using user access token.
+ * Subject to Row-Level Security (RLS) under the authenticated user's identity.
+ * Does NOT use service-role key. Safe for authenticated user requests.
+ */
+export function getSupabaseAuthenticatedClient(accessToken: string): SupabaseClient | null {
+  if (!isSupabaseConfigured() || !accessToken) {
+    return null;
+  }
+  const url = getSupabaseUrl();
+  const anonKey = getSupabaseAnonKey();
+  return createClient(url, anonKey, {
+    auth: { persistSession: false },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      },
+      fetch: (fetchUrl, options = {}) => {
+        return fetch(fetchUrl, {
+          ...options,
+          cache: 'no-store'
+        });
+      }
+    }
+  });
+}
+
 let dbReadyCache: { ready: boolean; timestamp: number } | null = null;
 
 /**

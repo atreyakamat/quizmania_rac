@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { checkRateLimit, getClientIp, getSupabasePublicClient } from '@quizmania/shared';
-import { ADMIN_COOKIE_NAME, isEmailAuthorizedAdmin, verifyCsrfOrigin } from '@/lib/auth';
+import {
+  attachSessionCookies,
+  verifyAdminAuthorization,
+  verifyCsrfOrigin,
+} from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +38,7 @@ export async function POST(request: Request) {
   let password = '';
   try {
     const body = await request.json();
-    email = (body.email || '').trim();
+    email = (body.email || '').trim().toLowerCase();
     password = body.password || '';
   } catch {
     return NextResponse.json(
@@ -50,36 +54,56 @@ export async function POST(request: Request) {
     );
   }
 
-  // 4. Automated Test & Mock Environment handling
+  // 4. Automated Test & Mock Environment Handling
   if (process.env.FORCE_MOCK_STORE === 'true' || process.env.NODE_ENV === 'test') {
     if (email === 'admin@quizmania.dev' && (password === 'admin123' || password === 'test-password')) {
+      const authCheck = await verifyAdminAuthorization(
+        '00000000-0000-4000-a000-000000000001',
+        'admin@quizmania.dev',
+        { role: 'admin' }
+      );
+
+      if (!authCheck.authorized) {
+        return NextResponse.json(
+          { success: false, error: authCheck.reason || 'Access denied' },
+          { status: 403 }
+        );
+      }
+
       const response = NextResponse.json({
         success: true,
         user: {
           id: '00000000-0000-4000-a000-000000000001',
           email: 'admin@quizmania.dev',
-          role: 'admin',
+          role: authCheck.role || 'admin',
         },
       });
-      response.cookies.set({
-        name: ADMIN_COOKIE_NAME,
-        value: 'test-admin-token',
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 24 * 7,
+
+      attachSessionCookies(response, {
+        accessToken: 'test-admin-token',
+        refreshToken: 'valid-refresh-token',
+        expiresIn: 3600,
       });
+
       return response;
     }
 
-    if (email === 'user@example.com') {
+    if (email === 'disabled-admin@quizmania.dev') {
       return NextResponse.json(
-        { success: false, error: 'Access denied: You do not have administrator privileges' },
+        { success: false, error: 'Administrator account is disabled' },
         { status: 403 }
       );
     }
 
+    if (email === 'user@example.com' && (password === 'password123' || password === 'admin123')) {
+      // Authenticated user, but NOT an authorized admin
+      return NextResponse.json(
+        { success: false, error: 'Access denied: Your account does not have administrator privileges.' },
+        { status: 403 }
+      );
+    }
+
+    // Generic invalid credential response (no user enumeration)
     return NextResponse.json(
       { success: false, error: 'Invalid email or password' },
       { status: 401 }
@@ -90,24 +114,22 @@ export async function POST(request: Request) {
   const supabase = getSupabasePublicClient();
   if (!supabase) {
     // Development fallback when Supabase is not configured
-    if (process.env.NODE_ENV !== 'production' && email.toLowerCase() === 'admin@quizmania.dev') {
+    if (process.env.NODE_ENV !== 'production' && email === 'admin@quizmania.dev' && password === 'admin123') {
       const response = NextResponse.json({
         success: true,
         user: {
-          id: 'local-dev-admin',
+          id: '00000000-0000-4000-a000-000000000001',
           email: 'admin@quizmania.dev',
           role: 'admin',
         },
       });
-      response.cookies.set({
-        name: ADMIN_COOKIE_NAME,
-        value: 'test-admin-token',
-        httpOnly: true,
-        secure: false,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 24 * 7,
+
+      attachSessionCookies(response, {
+        accessToken: 'test-admin-token',
+        refreshToken: 'valid-refresh-token',
+        expiresIn: 3600,
       });
+
       return response;
     }
 
@@ -124,10 +146,10 @@ export async function POST(request: Request) {
     });
 
     if (error || !data.user || !data.session) {
-      // If dev mode and testing default dev credentials
+      // In local dev with default test credentials fallback
       if (
         process.env.NODE_ENV !== 'production' &&
-        email.toLowerCase() === 'admin@quizmania.dev' &&
+        email === 'admin@quizmania.dev' &&
         password === 'admin123'
       ) {
         const response = NextResponse.json({
@@ -138,58 +160,54 @@ export async function POST(request: Request) {
             role: 'admin',
           },
         });
-        response.cookies.set({
-          name: ADMIN_COOKIE_NAME,
-          value: 'test-admin-token',
-          httpOnly: true,
-          secure: false,
-          sameSite: 'lax',
-          path: '/',
-          maxAge: 60 * 60 * 24 * 7,
+
+        attachSessionCookies(response, {
+          accessToken: 'test-admin-token',
+          refreshToken: 'valid-refresh-token',
+          expiresIn: 3600,
         });
+
         return response;
       }
 
+      // Generic error message: never reveal whether account exists
       return NextResponse.json(
-        { success: false, error: error?.message || 'Invalid email or password' },
+        { success: false, error: 'Invalid email or password' },
         { status: 401 }
       );
     }
 
-    // 6. Explicit Administrator Role & Allowlist Check
-    const isAuthorized = isEmailAuthorizedAdmin(data.user.email, {
-      ...data.user.user_metadata,
-      ...data.user.app_metadata,
-    });
+    // 6. Enforce Explicit Admin Authorization (NO domain-based allowance)
+    const authCheck = await verifyAdminAuthorization(
+      data.user.id,
+      data.user.email || email,
+      {
+        ...data.user.user_metadata,
+        ...data.user.app_metadata,
+      }
+    );
 
-    if (!isAuthorized) {
+    if (!authCheck.authorized) {
       return NextResponse.json(
-        { success: false, error: 'Access denied: Your account does not have administrator privileges.' },
+        { success: false, error: authCheck.reason || 'Access denied: Your account does not have administrator privileges.' },
         { status: 403 }
       );
     }
 
-    // 7. Issue HttpOnly Session Cookie
-    const token = data.session.access_token;
-    const maxAge = data.session.expires_in || 60 * 60 * 24 * 7;
-
+    // 7. Issue Session Cookies with Access and Refresh Token Lifecycle
     const response = NextResponse.json({
       success: true,
       user: {
         id: data.user.id,
         email: data.user.email,
-        role: 'admin',
+        role: authCheck.role || 'admin',
       },
     });
 
-    response.cookies.set({
-      name: ADMIN_COOKIE_NAME,
-      value: token,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge,
+    attachSessionCookies(response, {
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+      expiresIn: data.session.expires_in,
     });
 
     return response;

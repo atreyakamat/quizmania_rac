@@ -5,10 +5,28 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShieldCheck, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
 
+/**
+ * Sanitizes redirect URLs to strictly prevent open redirect vulnerabilities.
+ * Disallows external schemes, protocol-relative '//', and non-relative paths.
+ */
+function getSafeRedirectUrl(rawNext: string | null): string {
+  if (!rawNext) return '/';
+  const trimmed = rawNext.trim();
+  if (
+    !trimmed.startsWith('/') ||
+    trimmed.startsWith('//') ||
+    trimmed.startsWith('/\\') ||
+    trimmed.includes('://')
+  ) {
+    return '/';
+  }
+  return trimmed;
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextUrl = searchParams.get('next') || '/';
+  const nextUrl = getSafeRedirectUrl(searchParams.get('next'));
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -40,12 +58,12 @@ function LoginForm() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setError(data.error || 'Login failed. Please check your credentials.');
+        setError(data.error || 'Invalid email or password.');
         setLoading(false);
         return;
       }
 
-      // Successfully authenticated
+      // Successfully authenticated & authorized -> redirect to verified safe path
       router.replace(nextUrl);
       router.refresh();
     } catch (err) {
@@ -131,7 +149,7 @@ function LoginForm() {
 
       <div className="mt-6 pt-5 border-t border-[#301322]/80 text-center">
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          Authorized access only. Session tokens are protected via secure HttpOnly authentication.
+          Authorized administrators only. Session tokens are protected via secure HttpOnly authentication.
         </p>
       </div>
     </div>

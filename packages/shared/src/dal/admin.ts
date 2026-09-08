@@ -16,7 +16,7 @@ import type {
 } from '@quizmania/types';
 import { convertQuizJsonToQuiz, getQuizAvailability, validateScheduleTimes } from '@quizmania/quiz-schema';
 import { getSupabaseAdminClient, isSupabaseDatabaseReady } from '../supabase';
-import { mockStore } from '../mock-data';
+import { mockStore, AdminUserRecord } from '../mock-data';
 
 const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -1004,4 +1004,87 @@ export async function exportResponsesCsv(filters: ResponsesFilterParams = {}): P
   ].join(','));
 
   return [headers.join(','), ...rows].join('\n');
+}
+
+/**
+ * Retrieves an admin user record by Supabase user_id or email.
+ * Checks live database when available, falling back to environment allowlist and mock store.
+ */
+export async function getAdminUserRecord(userIdOrEmail: string): Promise<AdminUserRecord | null> {
+  if (!userIdOrEmail) return null;
+  const search = userIdOrEmail.trim().toLowerCase();
+
+  const isLive = await isSupabaseDatabaseReady();
+  if (isLive) {
+    const supabase = getSupabaseAdminClient();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('admin_users')
+          .select('*')
+          .or(`user_id.eq.${userIdOrEmail},email.eq.${search}`)
+          .limit(1)
+          .maybeSingle();
+
+        if (!error && data) {
+          return data as AdminUserRecord;
+        }
+      } catch {
+        // Fall back to allowlist / mock store if table is not yet migrated
+      }
+    }
+  }
+
+  // Check explicit ADMIN_EMAILS environment variable allowlist
+  const envAdminEmails = process.env.ADMIN_EMAILS;
+  if (envAdminEmails && envAdminEmails.trim().length > 0) {
+    const allowed = envAdminEmails.split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+    if (allowed.includes(search)) {
+      return {
+        id: 'env-allowlist-admin',
+        user_id: userIdOrEmail,
+        email: search,
+        role: 'admin',
+        enabled: true,
+        created_at: new Date().toISOString()
+      };
+    }
+  }
+
+  // Fallback to in-memory/disk mock store
+  return mockStore.getAdminUser(userIdOrEmail);
+}
+
+/**
+ * Creates or updates an admin user record in the administrative store.
+ */
+export async function saveAdminUserRecord(admin: AdminUserRecord): Promise<AdminUserRecord> {
+  const isLive = await isSupabaseDatabaseReady();
+  if (isLive) {
+    const supabase = getSupabaseAdminClient();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('admin_users')
+          .upsert({
+            id: admin.id || ensureUuid(),
+            user_id: admin.user_id,
+            email: admin.email.toLowerCase().trim(),
+            role: admin.role || 'admin',
+            enabled: admin.enabled ?? true,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'email' })
+          .select()
+          .single();
+
+        if (!error && data) {
+          return data as AdminUserRecord;
+        }
+      } catch (err) {
+        console.warn('Could not persist to admin_users table:', err);
+      }
+    }
+  }
+
+  return mockStore.saveAdminUser(admin);
 }

@@ -235,3 +235,25 @@ VALUES
   ('d0000000-0000-0000-0000-000000000002', 'Nature Green', '#2E7D32', '#81C784', '#F1F8E9', '#FFFFFF', '#1A1A1A', '#2E7D32', '0.75rem', 'Inter, system-ui, sans-serif'),
   ('d0000000-0000-0000-0000-000000000003', 'Ocean Blue', '#0284C7', '#7DD3FC', '#F0F9FF', '#FFFFFF', '#0C4A6E', '#0284C7', '1rem', 'Inter, system-ui, sans-serif')
 ON CONFLICT (id) DO NOTHING;
+
+-- 12. ADMIN USERS TABLE (Explicit Server-Side Authorization Allowlist)
+CREATE TABLE IF NOT EXISTS public.admin_users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID UNIQUE, -- references auth.users(id) when using Supabase Auth
+  email TEXT NOT NULL UNIQUE,
+  role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('admin', 'superadmin', 'editor')),
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_users_user_id ON public.admin_users(user_id);
+CREATE INDEX IF NOT EXISTS idx_admin_users_email ON public.admin_users(email);
+
+ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admin full access admin_users" ON public.admin_users FOR ALL TO service_role USING (true);
+CREATE POLICY "Admins can read admin_users" ON public.admin_users FOR SELECT TO authenticated USING (
+  user_id = auth.uid() OR EXISTS (
+    SELECT 1 FROM public.admin_users au WHERE au.user_id = auth.uid() AND au.enabled = true
+  )
+);

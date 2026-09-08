@@ -62,6 +62,43 @@ export interface MockAttempt {
   status: 'started' | 'in_progress' | 'submitted' | 'auto_submitted' | 'expired' | 'abandoned';
 }
 
+export interface AdminUserRecord {
+  id: string;
+  user_id: string;
+  email: string;
+  role: 'admin' | 'superadmin' | 'editor';
+  enabled: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export const defaultMockAdminUsers: AdminUserRecord[] = [
+  {
+    id: '00000000-0000-4000-a000-000000000001',
+    user_id: '00000000-0000-4000-a000-000000000001',
+    email: 'admin@quizmania.dev',
+    role: 'admin',
+    enabled: true,
+    created_at: new Date().toISOString()
+  },
+  {
+    id: '00000000-0000-4000-a000-000000000002',
+    user_id: '00000000-0000-4000-a000-000000000002',
+    email: 'disabled-admin@quizmania.dev',
+    role: 'admin',
+    enabled: false,
+    created_at: new Date().toISOString()
+  },
+  {
+    id: '00000000-0000-4000-a000-000000000003',
+    user_id: '00000000-0000-4000-a000-000000000003',
+    email: 'user@example.com',
+    role: 'editor',
+    enabled: true,
+    created_at: new Date().toISOString()
+  }
+];
+
 const STORE_FILE = '/tmp/quizmania-local-store.json';
 
 function getNodeFs(): any {
@@ -76,7 +113,7 @@ function getNodeFs(): any {
   }
 }
 
-function readStoreFile(): { quizzes?: Quiz[]; themes?: Theme[]; submissions?: Submission[]; attempts?: MockAttempt[]; answers?: Answer[] } | null {
+function readStoreFile(): { quizzes?: Quiz[]; themes?: Theme[]; submissions?: Submission[]; attempts?: MockAttempt[]; answers?: Answer[]; adminUsers?: AdminUserRecord[] } | null {
   const fs = getNodeFs();
   if (!fs) return null;
   try {
@@ -90,7 +127,7 @@ function readStoreFile(): { quizzes?: Quiz[]; themes?: Theme[]; submissions?: Su
   return null;
 }
 
-function writeStoreFile(data: { quizzes: Quiz[]; themes: Theme[]; submissions: Submission[]; attempts: MockAttempt[]; answers?: Answer[] }) {
+function writeStoreFile(data: { quizzes: Quiz[]; themes: Theme[]; submissions: Submission[]; attempts: MockAttempt[]; answers?: Answer[]; adminUsers?: AdminUserRecord[] }) {
   const fs = getNodeFs();
   if (!fs) return;
   try {
@@ -106,6 +143,7 @@ class MockStore {
   submissions: Submission[] = [];
   attempts: MockAttempt[] = [];
   answers: Answer[] = [];
+  adminUsers: AdminUserRecord[] = JSON.parse(JSON.stringify(defaultMockAdminUsers));
 
   constructor() {
     this.syncFromDisk();
@@ -119,6 +157,7 @@ class MockStore {
       if (Array.isArray(data.submissions)) this.submissions = data.submissions;
       if (Array.isArray(data.attempts)) this.attempts = data.attempts;
       if (Array.isArray(data.answers)) this.answers = data.answers;
+      if (Array.isArray(data.adminUsers) && data.adminUsers.length > 0) this.adminUsers = data.adminUsers;
     } else {
       this.syncToDisk();
     }
@@ -130,8 +169,27 @@ class MockStore {
       themes: this.themes,
       submissions: this.submissions,
       attempts: this.attempts,
-      answers: this.answers
+      answers: this.answers,
+      adminUsers: this.adminUsers
     });
+  }
+
+  getAdminUser(userIdOrEmail: string): AdminUserRecord | null {
+    this.syncFromDisk();
+    const search = userIdOrEmail.trim().toLowerCase();
+    return this.adminUsers.find(u => u.user_id === userIdOrEmail || u.email.toLowerCase() === search) || null;
+  }
+
+  saveAdminUser(admin: AdminUserRecord): AdminUserRecord {
+    this.syncFromDisk();
+    const index = this.adminUsers.findIndex(u => u.user_id === admin.user_id || u.email.toLowerCase() === admin.email.toLowerCase());
+    if (index >= 0) {
+      this.adminUsers[index] = { ...this.adminUsers[index], ...admin, updated_at: new Date().toISOString() };
+    } else {
+      this.adminUsers.push(admin);
+    }
+    this.syncToDisk();
+    return admin;
   }
 
   createAttempt(attempt: MockAttempt): MockAttempt {

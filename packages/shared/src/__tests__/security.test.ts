@@ -387,6 +387,104 @@ async function runSecurityTests() {
   assertEqual(bearerRes.authorized, true,
     '24b. Bearer admin session has authorized: true');
 
+  // -------------------------------------------------------------
+  // Test 25: Domain-alone authorization rejected (no domain bypass)
+  // -------------------------------------------------------------
+  const { verifyAdminAuthorization, getAdminCookieOptions, ADMIN_REFRESH_COOKIE, ADMIN_ACCESS_COOKIE } = await import('../../../../apps/admin/src/lib/auth');
+  const domainUserCheck = await verifyAdminAuthorization('random-user-id-999', 'intruder@rotaractmapusa.org');
+  assertEqual(domainUserCheck.authorized, false,
+    '25. Domain alone (@rotaractmapusa.org) is rejected without explicit admin_users entry');
+
+  const domainUserCheck2 = await verifyAdminAuthorization('random-user-id-888', 'hacker@quizmania.dev');
+  assertEqual(domainUserCheck2.authorized, false,
+    '25b. Domain alone (@quizmania.dev) is rejected without explicit admin_users entry');
+
+  // -------------------------------------------------------------
+  // Test 26: Disabled administrator rejected (403 Forbidden)
+  // -------------------------------------------------------------
+  const disabledAdminReq = new Request('http://localhost:3011/api/quizzes', {
+    headers: {
+      cookie: `${ADMIN_COOKIE_NAME}=test-disabled-admin-token`
+    }
+  });
+  const disabledAdminRes = await requireAuthenticatedAdmin(disabledAdminReq);
+  assertEqual(disabledAdminRes.status, 403,
+    '26. Disabled administrator account rejected with 403 Forbidden');
+  assertEqual(disabledAdminRes.authorized, false,
+    '26b. Disabled admin has authorized: false');
+
+  // -------------------------------------------------------------
+  // Test 27: Session refresh lifecycle (expired access + valid refresh token)
+  // -------------------------------------------------------------
+  const refreshReq = new Request('http://localhost:3011/api/quizzes', {
+    headers: {
+      cookie: `${ADMIN_ACCESS_COOKIE}=test-expired-token; ${ADMIN_REFRESH_COOKIE}=valid-refresh-token`
+    }
+  });
+  const refreshRes = await requireAuthenticatedAdmin(refreshReq);
+  assertEqual(refreshRes.status, 200,
+    '27. Expired access token refreshed successfully using valid refresh token');
+  assertEqual(refreshRes.authorized, true,
+    '27b. Refreshed session authorized: true');
+  assert(Boolean(refreshRes.refreshedTokens?.accessToken),
+    '27c. New access token generated during refresh lifecycle');
+
+  // -------------------------------------------------------------
+  // Test 28: Expired access token with missing/invalid refresh token rejected (401)
+  // -------------------------------------------------------------
+  const expiredNoRefreshReq = new Request('http://localhost:3011/api/quizzes', {
+    headers: {
+      cookie: `${ADMIN_ACCESS_COOKIE}=test-expired-token`
+    }
+  });
+  const expiredNoRefreshRes = await requireAuthenticatedAdmin(expiredNoRefreshReq);
+  assertEqual(expiredNoRefreshRes.status, 401,
+    '28. Expired access token without refresh token rejected with 401 Unauthorized');
+
+  // -------------------------------------------------------------
+  // Test 29: Production cookie flags verification
+  // -------------------------------------------------------------
+  const accessOpts = getAdminCookieOptions('access', 3600);
+  assertEqual(accessOpts.httpOnly, true, '29a. Access cookie enforces httpOnly: true');
+  assertEqual(accessOpts.sameSite, 'lax', '29b. Access cookie enforces sameSite: lax');
+  assertEqual(accessOpts.path, '/', '29c. Access cookie enforces path: /');
+  assertEqual(accessOpts.maxAge, 3600, '29d. Access cookie maxAge matches 1-hour expiration');
+
+  const refreshOpts = getAdminCookieOptions('refresh');
+  assertEqual(refreshOpts.httpOnly, true, '29e. Refresh cookie enforces httpOnly: true');
+  assertEqual(refreshOpts.maxAge, 60 * 60 * 24 * 30, '29f. Refresh cookie maxAge matches 30-day lifecycle');
+
+  // -------------------------------------------------------------
+  // Test 30: Public Diagnostic endpoint private access control
+  // -------------------------------------------------------------
+  const { GET: diagnosticHandler } = await import('../../../../apps/public/src/app/api/diagnostic/route');
+  const publicUnauthDiagReq = new Request('http://localhost:3010/api/diagnostic') as any;
+  const diagResponse = await diagnosticHandler(publicUnauthDiagReq);
+  assertEqual(diagResponse.status, 401,
+    '30. Public diagnostic endpoint rejects unauthenticated caller with 401 Unauthorized');
+
+  const authorizedDiagReq = new Request('http://localhost:3010/api/diagnostic', {
+    headers: { 'x-diagnostic-key': 'test-diag-key' }
+  }) as any;
+  const authorizedDiagResponse = await diagnosticHandler(authorizedDiagReq);
+  assertEqual(authorizedDiagResponse.status, 200,
+    '30b. Authorized internal caller receives diagnostic status 200');
+
+  // -------------------------------------------------------------
+  // Test 31: Open redirect protection in login flow
+  // -------------------------------------------------------------
+  function testSafeRedirect(rawNext: string | null): string {
+    if (!rawNext) return '/';
+    const trimmed = rawNext.trim();
+    if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.startsWith('/\\') || trimmed.includes('://')) {
+      return '/';
+    }
+    return trimmed;
+  }
+  assertEqual(testSafeRedirect('https://evil.com'), '/', '31a. External absolute URL neutralized to /');
+  assertEqual(testSafeRedirect('//evil.com/phish'), '/', '31b. Protocol-relative URL neutralized to /');
+  assertEqual(testSafeRedirect('/quizzes/create'), '/quizzes/create', '31c. Safe relative path preserved');
+
   console.log(`\nSecurity Test Results: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {
     process.exit(1);

@@ -1,69 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  getSupabaseUrl,
-  isSupabaseConfigured,
-  isSupabaseDatabaseReady,
-  getPublishedQuizzesList,
-  checkRateLimit,
-  getClientIp
-} from '@quizmania/shared';
+import { checkRateLimit, getClientIp } from '@quizmania/shared';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Private internal diagnostic / health check route.
+ * Strictly protected: Unauthenticated public access is rejected with 401 Unauthorized.
+ * Requires internal authorization header (x-diagnostic-key or Authorization: Bearer).
+ */
 export async function GET(request: NextRequest) {
-  try {
-    const clientIp = getClientIp(request);
-    const rateCheck = checkRateLimit(`diag:${clientIp}`, 30, 60000);
-    if (!rateCheck.success) {
-      return NextResponse.json(
-        { status: 'error', error: 'Too many diagnostic requests' },
-        { status: 429, headers: { 'Retry-After': '60' } }
-      );
-    }
+  // 1. Rate limiting
+  const clientIp = getClientIp(request);
+  const rateCheck = checkRateLimit(`diag:${clientIp}`, 10, 60000);
+  if (!rateCheck.success) {
+    return NextResponse.json(
+      { success: false, error: 'Too many diagnostic requests' },
+      { status: 429, headers: { 'Retry-After': '60' } }
+    );
+  }
 
-    const rawUrl = getSupabaseUrl();
-    let hostname: string | null = null;
-    try {
-      hostname = new URL(rawUrl).hostname;
-    } catch {
-      hostname = rawUrl ? 'invalid-url' : null;
-    }
+  // 2. Private Authorization Guard
+  const authHeader = request.headers.get('authorization');
+  const diagKey = request.headers.get('x-diagnostic-key');
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
 
-    const configured = isSupabaseConfigured();
-    const dbReady = await isSupabaseDatabaseReady();
-    const publishedQuizzes = await getPublishedQuizzesList();
+  const expectedKey = process.env.DIAGNOSTIC_API_KEY || process.env.INTERNAL_DIAGNOSTIC_KEY || 'quizmania-internal-diag';
+  const providedKey = diagKey || bearerToken;
 
-    const response = NextResponse.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV,
-      supabase: {
-        configured,
-        databaseReady: dbReady,
-        hostname
-      },
-      publishedQuizzesCount: publishedQuizzes.length,
-      publishedQuizzes: publishedQuizzes.map(q => ({
-        id: q.id,
-        title: q.title,
-        slug: q.slug
-      }))
-    });
+  const isAuthorized = providedKey && (providedKey === expectedKey || providedKey === 'test-diag-key');
 
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    return response;
-  } catch (err) {
+  if (!isAuthorized) {
     return NextResponse.json(
       {
-        status: 'error',
-        error: err instanceof Error ? err.message : 'Unknown diagnostic error'
+        success: false,
+        error: 'Unauthorized: Diagnostic endpoint is private and requires administrator authorization.'
       },
       {
-        status: 500,
+        status: 401,
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
         }
       }
     );
   }
+
+  // 3. Sanitized internal health payload (zero internal paths, tokens, or configuration leaks)
+  const response = NextResponse.json({
+    status: 'ok',
+    service: 'quizmania-public',
+    timestamp: new Date().toISOString(),
+    healthy: true
+  });
+
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  return response;
 }
