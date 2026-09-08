@@ -1,15 +1,26 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
   getSupabaseUrl,
   isSupabaseConfigured,
   isSupabaseDatabaseReady,
-  getPublishedQuizzesList
+  getPublishedQuizzesList,
+  checkRateLimit,
+  getClientIp
 } from '@quizmania/shared';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const clientIp = getClientIp(request);
+    const rateCheck = checkRateLimit(`diag:${clientIp}`, 30, 60000);
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { status: 'error', error: 'Too many diagnostic requests' },
+        { status: 429, headers: { 'Retry-After': '60' } }
+      );
+    }
+
     const rawUrl = getSupabaseUrl();
     let hostname: string | null = null;
     try {

@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getAllThemes, saveTheme } from '@quizmania/shared';
 import type { Theme } from '@quizmania/types';
+import { validateAdminRequest, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = validateAdminRequest(request);
+  if (!auth.authorized) {
+    return unauthorizedResponse(auth.reason);
+  }
+
   try {
     const themes = await getAllThemes();
     return NextResponse.json({ success: true, themes });
@@ -18,6 +24,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = validateAdminRequest(request);
+  if (!auth.authorized) {
+    return unauthorizedResponse(auth.reason);
+  }
+
   try {
     const body = await request.json();
     const themeData = (body.theme || body) as Theme;

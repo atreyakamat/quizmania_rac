@@ -64,11 +64,6 @@ export function QuizManiaFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/#about" className="hover:text-white transition-colors">
-                  About QuizMania
-                </Link>
-              </li>
-              <li>
                 <Link href="/#how-it-works" className="hover:text-white transition-colors">
                   How It Works
                 </Link>
@@ -108,9 +103,8 @@ export function QuizManiaFooter() {
           <div>
             © 2026 QuizMania • Rotaract Club of Mapusa. All rights reserved.
           </div>
-          <div className="flex items-center gap-1 text-[11px] text-slate-400">
-            <span>Official Platform of</span>
-            <span className="text-[#F3D6E1] font-semibold">Rotaract Club of Mapusa</span>
+          <div className="flex items-center gap-2 text-[11px] text-slate-400">
+            <span>Crafted with ❤️ for Rotaract Club of Mapusa by Atreya Kamat</span>
           </div>
         </div>
       </div>

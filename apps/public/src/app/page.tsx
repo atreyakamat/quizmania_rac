@@ -2,7 +2,6 @@ import React from 'react';
 import Link from 'next/link';
 import { QuizHero } from '@/components/QuizHero';
 import { QuizCard } from '@/components/QuizCard';
-import { AboutSection } from '@/components/AboutSection';
 import { HowItWorksSection } from '@/components/HowItWorksSection';
 import { RotaractMapusaSection } from '@/components/RotaractMapusaSection';
 import { getPublishedQuizzesList } from '@quizmania/shared';
@@ -84,14 +83,12 @@ export default async function QuizManiaLandingPage() {
         </div>
       </section>
 
-      {/* 3. About Section */}
-      <AboutSection />
-
-      {/* 4. How It Works Section */}
+      {/* 3. How It Works Section */}
       <HowItWorksSection />
 
-      {/* 5. Rotaract Club of Mapusa Section */}
+      {/* 4. Rotaract Club of Mapusa Section (with Group Fellowship Photograph) */}
       <RotaractMapusaSection />
     </div>
   );
 }
+

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { quizSubmissionSchema } from '@quizmania/quiz-schema';
-import { scoreAndRecordQuizSubmission, getQuizAttemptByToken, updateQuizAttemptStatus } from '@quizmania/shared';
+import {
+  scoreAndRecordQuizSubmission,
+  getQuizAttemptByToken,
+  updateQuizAttemptStatus,
+  checkRateLimit,
+  getClientIp
+} from '@quizmania/shared';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +15,22 @@ export async function POST(
   { params }: { params: { slug: string } }
 ) {
   try {
-    const json = await request.json();
+    const clientIp = getClientIp(request);
+    const rateCheck = checkRateLimit(`submit:${clientIp}`, 20, 60000);
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { success: false, error: 'Too many submission requests. Please slow down.' },
+        { status: 429, headers: { 'Retry-After': '60' } }
+      );
+    }
+
+    let json: any;
+    try {
+      json = await request.json();
+    } catch {
+      return NextResponse.json({ success: false, error: 'Invalid JSON payload' }, { status: 400 });
+    }
+
 
     const attemptId = json.attemptId;
     const sessionToken = json.sessionToken;

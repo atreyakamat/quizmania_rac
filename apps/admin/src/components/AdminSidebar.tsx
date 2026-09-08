@@ -112,7 +112,7 @@ export function AdminSidebar() {
             }`}
           >
             <BarChart3 className="w-4 h-4 text-emerald-400" />
-            Responses
+            Results
           </Link>
           <Link
             href="/ai"

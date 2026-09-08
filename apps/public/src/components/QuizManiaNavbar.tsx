@@ -30,9 +30,6 @@ export function QuizManiaNavbar() {
           <Link href="/quizzes" className="hover:text-[#A50D52] transition-colors">
             Explore Quizzes
           </Link>
-          <Link href="/#about" className="hover:text-[#A50D52] transition-colors">
-            About
-          </Link>
           <Link href="/#how-it-works" className="hover:text-[#A50D52] transition-colors">
             How It Works
           </Link>
@@ -82,13 +79,6 @@ export function QuizManiaNavbar() {
               className="px-4 py-3 rounded-xl text-sm font-semibold text-[#24141C] hover:bg-[#FAF8F9] hover:text-[#A50D52] transition-colors"
             >
               Explore Quizzes
-            </Link>
-            <Link
-              href="/#about"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-4 py-3 rounded-xl text-sm font-semibold text-[#24141C] hover:bg-[#FAF8F9] hover:text-[#A50D52] transition-colors"
-            >
-              About QuizMania
             </Link>
             <Link
               href="/#how-it-works"

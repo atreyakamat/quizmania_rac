@@ -7,5 +7,6 @@ export * from './scoring';
 export * from './dal/public';
 export * from './dal/admin';
 export * from './fixtures/qa-fixture';
+export * from './rate-limiter';
 export * from '@quizmania/quiz-schema';
 

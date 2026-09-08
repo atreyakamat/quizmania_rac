@@ -14,6 +14,7 @@
     "build": "npm run build --workspaces",
     "build:public": "npm run build --workspace=@quizmania/types && npm run build --workspace=@quizmania/shared && npm run build --workspace=@quizmania/quiz-schema && npm run build --workspace=@quizmania/public",
     "test": "npm run test --workspace=@quizmania/shared && npm run test --workspace=@quizmania/quiz-schema && npx tsx apps/admin/src/lib/ollama/__tests__/ollama-generator.test.ts",
+    "scan-secrets": "node scripts/scan-secrets.mjs",
     "lint": "npm run lint --workspaces"
   },
   "devDependencies": {

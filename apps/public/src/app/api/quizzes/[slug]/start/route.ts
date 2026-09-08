@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPublishedQuizBySlug, createQuizAttempt } from '@quizmania/shared';
+import { getPublishedQuizBySlug, createQuizAttempt, checkRateLimit, getClientIp } from '@quizmania/shared';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,11 +11,34 @@ interface StartAttemptBody {
 
 export async function POST(req: NextRequest, { params }: { params: { slug: string } }) {
   try {
-    const body = (await req.json()) as StartAttemptBody;
+    const clientIp = getClientIp(req);
+    const rateCheck = checkRateLimit(`start:${clientIp}`, 30, 60000);
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { success: false, error: 'Too many attempt requests. Please slow down.' },
+        { status: 429, headers: { 'Retry-After': '60' } }
+      );
+    }
+
+    let body: StartAttemptBody;
+    try {
+      body = (await req.json()) as StartAttemptBody;
+    } catch {
+      return NextResponse.json({ success: false, error: 'Invalid JSON payload' }, { status: 400 });
+    }
+
     const slug = params.slug;
 
-    if (!body.participant_name?.trim()) {
+    if (!body || typeof body !== 'object' || !body.participant_name || typeof body.participant_name !== 'string' || !body.participant_name.trim()) {
       return NextResponse.json({ success: false, error: 'Participant name is required' }, { status: 400 });
+    }
+
+    if (body.participant_name.length > 100) {
+      return NextResponse.json({ success: false, error: 'Participant name exceeds maximum length of 100 characters' }, { status: 400 });
+    }
+
+    if (body.participant_email && (typeof body.participant_email !== 'string' || body.participant_email.length > 255)) {
+      return NextResponse.json({ success: false, error: 'Participant email is invalid' }, { status: 400 });
     }
 
     const quiz = await getPublishedQuizBySlug(slug);

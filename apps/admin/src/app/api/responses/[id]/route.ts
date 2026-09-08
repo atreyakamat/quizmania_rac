@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getResponseDetail, updateManualGrade } from '@quizmania/shared';
+import { validateAdminRequest, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,6 +8,11 @@ export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const auth = validateAdminRequest(request);
+  if (!auth.authorized) {
+    return unauthorizedResponse(auth.reason);
+  }
+
   try {
     const detail = await getResponseDetail(params.id);
     if (!detail) {
@@ -29,6 +35,11 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const auth = validateAdminRequest(request);
+  if (!auth.authorized) {
+    return unauthorizedResponse(auth.reason);
+  }
+
   try {
     const body = await request.json();
     const { questionId, earnedMarks } = body;
