@@ -11,11 +11,15 @@ import {
   Palette, 
   BarChart3, 
   Settings,
-  Sparkles
+  Sparkles,
+  LogOut,
+  ShieldCheck
 } from 'lucide-react';
+import { useAdminAuth } from './AdminAuthProvider';
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const { user, logout } = useAdminAuth();
 
   return (
     <aside className="w-64 bg-[#180A12] text-slate-200 min-h-screen flex flex-col border-r border-[#301322] flex-shrink-0">
@@ -135,16 +139,39 @@ export function AdminSidebar() {
         </div>
       </nav>
 
-      {/* Local Admin & Rotaract footer */}
-      <div className="p-4 border-t border-[#301322] bg-[#10060C] space-y-2">
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <div className="w-2 h-2 rounded-full bg-[#D83B70] animate-pulse" />
-          <span>Local Admin Studio (:3011)</span>
+      {/* Authenticated Admin & Logout Footer */}
+      <div className="p-4 border-t border-[#301322] bg-[#10060C] space-y-3">
+        {user && (
+          <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-white/5 border border-white/5">
+            <div className="flex items-center gap-2 min-w-0">
+              <ShieldCheck className="w-4 h-4 text-[#D83B70] shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs text-white font-medium truncate">
+                  {user.email || 'Admin'}
+                </p>
+                <p className="text-[10px] text-emerald-400 font-medium">
+                  Authenticated Session
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={logout}
+              className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-950/40 rounded-md transition-colors shrink-0"
+              title="Sign Out"
+              aria-label="Sign Out"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 text-[11px] text-slate-400">
+          <div className="w-2 h-2 rounded-full bg-[#D83B70] animate-pulse shrink-0" />
+          <span className="truncate">Rotaract Club of Mapusa</span>
         </div>
-        <p className="text-[10px] text-slate-500">
-          Rotaract Club of Mapusa
-        </p>
       </div>
     </aside>
   );
 }
+

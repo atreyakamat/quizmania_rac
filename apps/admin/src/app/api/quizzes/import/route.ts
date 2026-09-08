@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server';
 import { importQuizFromJson } from '@quizmania/shared';
 import { validateQuizJson } from '@quizmania/quiz-schema';
 import type { QuizJsonImportFormat } from '@quizmania/types';
-import { validateAdminRequest, unauthorizedResponse } from '@/lib/auth';
+import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  const auth = validateAdminRequest(request);
+  const auth = await requireAuthenticatedAdmin(request);
   if (!auth.authorized) {
-    return unauthorizedResponse(auth.reason);
+    return unauthorizedResponse(auth.error, auth.status);
   }
 
   try {

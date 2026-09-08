@@ -2,12 +2,49 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 import { AdminSidebar } from './AdminSidebar';
-import { Menu, X, Globe2, ExternalLink } from 'lucide-react';
-import Link from 'next/link';
+import { AdminAuthProvider, useAdminAuth } from './AdminAuthProvider';
+import { Menu, X, ExternalLink, Loader2, Shield } from 'lucide-react';
 
-export function AdminShell({ children }: { children: React.ReactNode }) {
+function AdminShellInner({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const { user, loading } = useAdminAuth();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // If on login page, render child component directly without shell chrome
+  if (pathname === '/login') {
+    return <>{children}</>;
+  }
+
+  // Prevent flash of private dashboard while verifying session
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#10060C] flex flex-col items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-white/10 p-2 border border-[#D83B70]/40 shadow-xl shadow-[#A50D52]/20 flex items-center justify-center">
+            <Image
+              src="/branding/quizmania.png"
+              alt="QuizMania Logo"
+              width={48}
+              height={48}
+              priority
+              className="w-full h-full object-contain"
+            />
+          </div>
+          <div className="flex items-center gap-2 text-slate-300 text-sm font-medium">
+            <Loader2 className="w-4 h-4 animate-spin text-[#D83B70]" />
+            <span>Verifying administrator session...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If no user is authenticated, AdminAuthProvider will have initiated redirect to /login
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-[#FAF8F9] antialiased">
@@ -88,5 +125,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
     </div>
+  );
+}
+
+export function AdminShell({ children }: { children: React.ReactNode }) {
+  return (
+    <AdminAuthProvider>
+      <AdminShellInner>{children}</AdminShellInner>
+    </AdminAuthProvider>
   );
 }

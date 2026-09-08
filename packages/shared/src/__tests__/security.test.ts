@@ -302,6 +302,91 @@ async function runSecurityTests() {
   assert(!errStr.includes('/home/') && !errStr.includes('SELECT * FROM') && !errStr.includes('stack'),
     '18. Safe error message contains no stack traces, paths, or SQL statements');
 
+  // -------------------------------------------------------------
+  // Test 19: Unauthenticated Admin request rejected (401)
+  // -------------------------------------------------------------
+  const { requireAuthenticatedAdmin, ADMIN_COOKIE_NAME } = await import('../../../../apps/admin/src/lib/auth');
+  const unauthReq = new Request('http://localhost:3011/api/quizzes');
+  const unauthRes = await requireAuthenticatedAdmin(unauthReq);
+  assertEqual(unauthRes.status, 401,
+    '19. Request without session token rejected with 401 Unauthorized');
+  assertEqual(unauthRes.authorized, false,
+    '19b. Unauthenticated request has authorized: false');
+
+  // -------------------------------------------------------------
+  // Test 20: Non-admin session token rejected (403 Forbidden)
+  // -------------------------------------------------------------
+  const nonAdminReq = new Request('http://localhost:3011/api/quizzes', {
+    headers: {
+      cookie: `${ADMIN_COOKIE_NAME}=test-non-admin-token`
+    }
+  });
+  const nonAdminRes = await requireAuthenticatedAdmin(nonAdminReq);
+  assertEqual(nonAdminRes.status, 403,
+    '20. Non-admin session token rejected with 403 Forbidden');
+  assertEqual(nonAdminRes.authorized, false,
+    '20b. Non-admin request has authorized: false');
+
+  // -------------------------------------------------------------
+  // Test 21: Authorized Admin session token accepted (200 OK)
+  // -------------------------------------------------------------
+  const adminReq = new Request('http://localhost:3011/api/quizzes', {
+    headers: {
+      cookie: `${ADMIN_COOKIE_NAME}=test-admin-token`
+    }
+  });
+  const adminRes = await requireAuthenticatedAdmin(adminReq);
+  assertEqual(adminRes.status, 200,
+    '21. Valid admin session token authorized with 200 OK');
+  assertEqual(adminRes.authorized, true,
+    '21b. Valid admin request has authorized: true');
+  assertEqual(adminRes.user?.role, 'admin',
+    '21c. Authenticated user has role: admin');
+
+  // -------------------------------------------------------------
+  // Test 22: CSRF Cross-Origin mutation rejected (403 Forbidden)
+  // -------------------------------------------------------------
+  const csrfReq = new Request('http://localhost:3011/api/quizzes', {
+    method: 'POST',
+    headers: {
+      host: 'localhost:3011',
+      origin: 'http://malicious-site.attacker.com',
+      cookie: `${ADMIN_COOKIE_NAME}=test-admin-token`
+    }
+  });
+  const csrfRes = await requireAuthenticatedAdmin(csrfReq);
+  assertEqual(csrfRes.status, 403,
+    '22. Cross-origin mutating request rejected with 403 Forbidden (CSRF defense)');
+  assertEqual(csrfRes.authorized, false,
+    '22b. CSRF attack rejected before route handler execution');
+
+  // -------------------------------------------------------------
+  // Test 23: Deprecated static header secret rejected
+  // -------------------------------------------------------------
+  const legacySecretReq = new Request('http://localhost:3011/api/quizzes', {
+    headers: {
+      'x-admin-key': 'legacy-secret-12345',
+      authorization: 'Bearer static-key-12345'
+    }
+  });
+  const legacySecretRes = await requireAuthenticatedAdmin(legacySecretReq);
+  assertEqual(legacySecretRes.status, 401,
+    '23. Static header secrets are rejected; real session token strictly required');
+
+  // -------------------------------------------------------------
+  // Test 24: Bearer token format accepted for CLI/automated agents
+  // -------------------------------------------------------------
+  const bearerReq = new Request('http://localhost:3011/api/quizzes', {
+    headers: {
+      authorization: 'Bearer test-admin-token'
+    }
+  });
+  const bearerRes = await requireAuthenticatedAdmin(bearerReq);
+  assertEqual(bearerRes.status, 200,
+    '24. Bearer session token accepted for automated/CLI workflows');
+  assertEqual(bearerRes.authorized, true,
+    '24b. Bearer admin session has authorized: true');
+
   console.log(`\nSecurity Test Results: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {
     process.exit(1);

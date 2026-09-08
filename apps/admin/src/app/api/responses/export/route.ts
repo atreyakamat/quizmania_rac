@@ -1,13 +1,13 @@
 import { exportResponsesCsv } from '@quizmania/shared';
 import type { ResponsesFilterParams } from '@quizmania/types';
-import { validateAdminRequest, unauthorizedResponse } from '@/lib/auth';
+import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const auth = validateAdminRequest(request);
+  const auth = await requireAuthenticatedAdmin(request);
   if (!auth.authorized) {
-    return unauthorizedResponse(auth.reason);
+    return unauthorizedResponse(auth.error, auth.status);
   }
 
   try {

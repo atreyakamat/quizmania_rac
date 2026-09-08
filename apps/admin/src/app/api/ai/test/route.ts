@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { testOllamaConnection, getDefaultOllamaConfig } from '@/lib/ollama/service';
-import { validateAdminRequest, unauthorizedResponse } from '@/lib/auth';
+import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const auth = validateAdminRequest(request);
+  const auth = await requireAuthenticatedAdmin(request);
   if (!auth.authorized) {
-    return unauthorizedResponse(auth.reason);
+    return unauthorizedResponse(auth.error, auth.status);
   }
 
   const config = getDefaultOllamaConfig();

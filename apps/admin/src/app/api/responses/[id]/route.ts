@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getResponseDetail, updateManualGrade } from '@quizmania/shared';
-import { validateAdminRequest, unauthorizedResponse } from '@/lib/auth';
+import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,9 +8,9 @@ export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const auth = validateAdminRequest(request);
+  const auth = await requireAuthenticatedAdmin(request);
   if (!auth.authorized) {
-    return unauthorizedResponse(auth.reason);
+    return unauthorizedResponse(auth.error, auth.status);
   }
 
   try {
@@ -35,9 +35,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const auth = validateAdminRequest(request);
+  const auth = await requireAuthenticatedAdmin(request);
   if (!auth.authorized) {
-    return unauthorizedResponse(auth.reason);
+    return unauthorizedResponse(auth.error, auth.status);
   }
 
   try {

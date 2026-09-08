@@ -118,6 +118,19 @@ for (const filePath of trackedFiles) {
         description: `Potential private credential pattern detected in tracked file.`
       });
     }
+
+    // Check 5: Deprecated / forbidden ADMIN_API_SECRET or x-admin-key
+    const isSecurityOrScanner = filePath.includes('scan-secrets.mjs') || filePath.includes('security.test.ts');
+    if (!isSecurityOrScanner) {
+      if (line.includes('ADMIN_API_SECRET') || line.includes('x-admin-key')) {
+        violations.push({
+          file: filePath,
+          line: lineNum,
+          rule: 'Deprecated Static Admin Secret',
+          description: `Usage of deprecated ADMIN_API_SECRET or x-admin-key header detected. All admin access must use authenticated sessions.`
+        });
+      }
+    }
   }
 }
 

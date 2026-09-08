@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runQuizGenerationPipeline } from '@/lib/ollama/pipeline';
-import { validateAdminRequest, unauthorizedResponse } from '@/lib/auth';
+import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 import { checkRateLimit, getClientIp } from '@quizmania/shared';
 
 export const dynamic = 'force-dynamic';
@@ -8,9 +8,9 @@ export const dynamic = 'force-dynamic';
 const MAX_AI_INPUT_LENGTH = 50000;
 
 export async function POST(req: NextRequest) {
-  const auth = validateAdminRequest(req);
+  const auth = await requireAuthenticatedAdmin(req);
   if (!auth.authorized) {
-    return unauthorizedResponse(auth.reason);
+    return unauthorizedResponse(auth.error, auth.status);
   }
 
   const clientIp = getClientIp(req);
