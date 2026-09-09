@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getResponsesPaginated } from '@quizmania/shared';
 import type { ResponsesFilterParams } from '@quizmania/types';
-import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
+import { adminJsonResponse, requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     };
 
     const result = await getResponsesPaginated(filters);
-    return NextResponse.json({ success: true, ...result });
+    return adminJsonResponse({ success: true, ...result }, auth);
   } catch (err) {
     console.error('Error fetching responses:', err);
     return NextResponse.json(

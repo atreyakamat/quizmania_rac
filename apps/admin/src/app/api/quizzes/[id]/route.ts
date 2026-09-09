@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getQuizById, deleteQuiz, exportQuizToJson } from '@quizmania/shared';
-import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
+import { adminJsonResponse, requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +26,7 @@ export async function GET(
           { status: 404 }
         );
       }
-      return NextResponse.json({ success: true, data: exportedData });
+      return adminJsonResponse({ success: true, data: exportedData }, auth);
     }
 
     const quiz = await getQuizById(id);
@@ -37,7 +37,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, quiz });
+    return adminJsonResponse({ success: true, quiz }, auth);
   } catch (err) {
     console.error('Error in quiz GET route:', err);
     return NextResponse.json(
@@ -65,7 +65,7 @@ export async function DELETE(
         { status: 404 }
       );
     }
-    return NextResponse.json({ success: true, message: 'Quiz deleted successfully' });
+    return adminJsonResponse({ success: true, message: 'Quiz deleted successfully' }, auth);
   } catch (err) {
     console.error('Error deleting quiz:', err);
     return NextResponse.json(

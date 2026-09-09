@@ -5,23 +5,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShieldCheck, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
 
-/**
- * Sanitizes redirect URLs to strictly prevent open redirect vulnerabilities.
- * Disallows external schemes, protocol-relative '//', and non-relative paths.
- */
-function getSafeRedirectUrl(rawNext: string | null): string {
-  if (!rawNext) return '/';
-  const trimmed = rawNext.trim();
-  if (
-    !trimmed.startsWith('/') ||
-    trimmed.startsWith('//') ||
-    trimmed.startsWith('/\\') ||
-    trimmed.includes('://')
-  ) {
-    return '/';
-  }
-  return trimmed;
-}
+import { getSafeRedirectUrl } from '@/lib/auth';
 
 function LoginForm() {
   const router = useRouter();

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getResponseDetail, updateManualGrade } from '@quizmania/shared';
-import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
+import { adminJsonResponse, requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +21,7 @@ export async function GET(
         { status: 404 }
       );
     }
-    return NextResponse.json({ success: true, ...detail });
+    return adminJsonResponse({ success: true, ...detail }, auth);
   } catch (err) {
     console.error(`Error fetching submission ${params.id}:`, err);
     return NextResponse.json(
@@ -59,7 +59,7 @@ export async function PATCH(
     }
 
     const result = await updateManualGrade(params.id, questionId, Number(earnedMarks));
-    return NextResponse.json(result);
+    return adminJsonResponse(result, auth);
   } catch (err) {
     console.error(`Error updating grade for submission ${params.id}:`, err);
     return NextResponse.json(

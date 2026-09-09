@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { attachSessionCookies, requireAuthenticatedAdmin } from '@/lib/auth';
+import { adminJsonResponse, requireAuthenticatedAdmin } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,16 +12,9 @@ export async function GET(request: Request) {
     );
   }
 
-  const response = NextResponse.json({
+  return adminJsonResponse({
     success: true,
     authenticated: true,
     user: auth.user,
-  });
-
-  // If session was refreshed during validation, attach updated cookies
-  if (auth.refreshedTokens) {
-    attachSessionCookies(response, auth.refreshedTokens);
-  }
-
-  return response;
+  }, auth);
 }

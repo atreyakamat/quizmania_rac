@@ -1,6 +1,6 @@
 import { exportResponsesCsv } from '@quizmania/shared';
 import type { ResponsesFilterParams } from '@quizmania/types';
-import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
+import { attachSessionCookies, requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,13 +28,26 @@ export async function GET(request: Request) {
     const csvData = await exportResponsesCsv(filters);
     const filename = `quizmania-responses-${new Date().toISOString().slice(0, 10)}.csv`;
 
-    return new Response(csvData, {
+    const response = new Response(csvData, {
       status: 200,
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`
       }
     });
+
+    if (auth.refreshedTokens) {
+      const nextResponse = new (await import('next/server')).NextResponse(csvData, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${filename}"`
+        }
+      });
+      return attachSessionCookies(nextResponse, auth.refreshedTokens);
+    }
+
+    return response;
   } catch (err) {
     console.error('Error exporting responses CSV:', err);
     return new Response('Failed to export responses', { status: 500 });

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAllQuizzes, saveQuiz } from '@quizmania/shared';
 import type { Quiz, QuizStatus } from '@quizmania/types';
-import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
+import { adminJsonResponse, requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status') as QuizStatus | null;
     const quizzes = await getAllQuizzes(status || undefined);
-    return NextResponse.json({ success: true, quizzes });
+    return adminJsonResponse({ success: true, quizzes }, auth);
   } catch (err) {
     console.error('Error fetching quizzes:', err);
     return NextResponse.json(
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     }
 
     const savedQuiz = await saveQuiz(quizData);
-    return NextResponse.json({ success: true, quiz: savedQuiz });
+    return adminJsonResponse({ success: true, quiz: savedQuiz }, auth);
   } catch (err) {
     console.error('Error saving quiz:', err);
     const msg = err instanceof Error ? err.message : 'Failed to save quiz';

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { exportQuizToJson } from '@quizmania/shared';
-import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
+import { adminJsonResponse, requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +22,7 @@ export async function GET(
         { status: 404 }
       );
     }
-    return NextResponse.json({ success: true, data });
+    return adminJsonResponse({ success: true, data }, auth);
   } catch (err) {
     console.error('Error exporting quiz:', err);
     return NextResponse.json(

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { testOllamaConnection, getDefaultOllamaConfig } from '@/lib/ollama/service';
-import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
+import { adminJsonResponse, requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,12 +12,12 @@ export async function GET(request: NextRequest) {
 
   const config = getDefaultOllamaConfig();
   const result = await testOllamaConnection(config);
-  return NextResponse.json({
+  return adminJsonResponse({
     ...result,
     config: {
       model: config.model,
       enabled: config.enabled
     }
-  });
+  }, auth);
 }
 

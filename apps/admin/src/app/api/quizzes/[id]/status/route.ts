@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { setQuizStatus } from '@quizmania/shared';
 import type { QuizStatus } from '@quizmania/types';
-import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
+import { adminJsonResponse, requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +34,7 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({ success: true, quiz: updatedQuiz });
+    return adminJsonResponse({ success: true, quiz: updatedQuiz }, auth);
   } catch (err) {
     console.error('Error setting quiz status:', err);
     return NextResponse.json(

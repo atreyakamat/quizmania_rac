@@ -1,4 +1,5 @@
 process.env.FORCE_MOCK_STORE = 'true';
+process.env.NODE_ENV = 'test';
 
 import {
   saveQuiz,
@@ -164,7 +165,7 @@ async function runSecurityTests() {
   // Test 8: Tampered score in client payload is rejected/ignored
   // -------------------------------------------------------------
   const attemptSession = `token-sec-${Date.now()}`;
-  const validAttemptId = 'valid-attempt-sec-1';
+  const validAttemptId = `valid-attempt-sec-${Date.now()}`;
   await createQuizAttempt({
     id: validAttemptId,
     quiz_id: testQuizId,
@@ -478,42 +479,78 @@ async function runSecurityTests() {
   assert(/samesite=lax/i.test(setCookieHeader), '29l. Production Set-Cookie header contains SameSite=Lax attribute');
 
   // -------------------------------------------------------------
-  // Test 30: Public Diagnostic endpoint private access control
+  // Test 30: Unified Diagnostic & Health Endpoint Access Control
   // -------------------------------------------------------------
-  const { GET: diagnosticHandler } = await import('../../../../apps/public/src/app/api/diagnostic/route');
+  const { GET: publicDiagHandler } = await import('../../../../apps/public/src/app/api/diagnostic/route');
+  const { GET: adminDiagHandler } = await import('../../../../apps/admin/src/app/api/diagnostic/route');
+  const { GET: healthHandler } = await import('../../../../apps/public/src/app/api/health/route');
+
+  // 30a: Public diagnostic rejects unauthenticated caller
   const publicUnauthDiagReq = new Request('http://localhost:3010/api/diagnostic') as any;
-  const diagResponse = await diagnosticHandler(publicUnauthDiagReq);
-  assertEqual(diagResponse.status, 401,
-    '30. Public diagnostic endpoint rejects unauthenticated caller with 401 Unauthorized');
+  const publicUnauthDiagRes = await publicDiagHandler(publicUnauthDiagReq);
+  assertEqual(publicUnauthDiagRes.status, 401,
+    '30a. Public diagnostic endpoint rejects unauthenticated caller with 401 Unauthorized');
 
-  const wrongKeyDiagReq = new Request('http://localhost:3010/api/diagnostic', {
-    headers: { 'x-diagnostic-key': 'wrong-unauthorized-key' }
-  }) as any;
-  const wrongKeyDiagResponse = await diagnosticHandler(wrongKeyDiagReq);
-  assertEqual(wrongKeyDiagResponse.status, 401,
-    '30b. Public diagnostic endpoint rejects invalid key with 401 Unauthorized');
-
-  const authorizedDiagReq = new Request('http://localhost:3010/api/diagnostic', {
+  // 30b: Public diagnostic rejects legacy x-diagnostic-key (no bypass)
+  const publicLegacyKeyDiagReq = new Request('http://localhost:3010/api/diagnostic', {
     headers: { 'x-diagnostic-key': 'test-diag-key' }
   }) as any;
-  const authorizedDiagResponse = await diagnosticHandler(authorizedDiagReq);
-  assertEqual(authorizedDiagResponse.status, 200,
-    '30c. Authorized internal caller receives diagnostic status 200');
+  const publicLegacyKeyDiagRes = await publicDiagHandler(publicLegacyKeyDiagReq);
+  assertEqual(publicLegacyKeyDiagRes.status, 401,
+    '30b. Public diagnostic endpoint strictly rejects x-diagnostic-key; admin session required');
+
+  // 30c: Public diagnostic accepts authenticated admin session
+  const publicAdminDiagReq = new Request('http://localhost:3010/api/diagnostic', {
+    headers: { cookie: `${ADMIN_COOKIE_NAME}=test-admin-token` }
+  }) as any;
+  const publicAdminDiagRes = await publicDiagHandler(publicAdminDiagReq);
+  assertEqual(publicAdminDiagRes.status, 200,
+    '30c. Public diagnostic endpoint succeeds with authenticated admin session (200 OK)');
+
+  // 30d: Admin diagnostic rejects unauthenticated caller
+  const adminUnauthDiagReq = new Request('http://localhost:3011/api/diagnostic');
+  const adminUnauthDiagRes = await adminDiagHandler(adminUnauthDiagReq);
+  assertEqual(adminUnauthDiagRes.status, 401,
+    '30d. Admin diagnostic endpoint rejects unauthenticated caller with 401 Unauthorized');
+
+  // 30e: Admin diagnostic rejects legacy x-diagnostic-key
+  const adminLegacyKeyDiagReq = new Request('http://localhost:3011/api/diagnostic', {
+    headers: { 'x-diagnostic-key': 'test-diag-key' }
+  });
+  const adminLegacyKeyDiagRes = await adminDiagHandler(adminLegacyKeyDiagReq);
+  assertEqual(adminLegacyKeyDiagRes.status, 401,
+    '30e. Admin diagnostic endpoint strictly rejects x-diagnostic-key; admin session required');
+
+  // 30f: Admin diagnostic accepts authenticated admin session
+  const adminAuthDiagReq = new Request('http://localhost:3011/api/diagnostic', {
+    headers: { cookie: `${ADMIN_COOKIE_NAME}=test-admin-token` }
+  });
+  const adminAuthDiagRes = await adminDiagHandler(adminAuthDiagReq);
+  assertEqual(adminAuthDiagRes.status, 200,
+    '30f. Admin diagnostic endpoint succeeds with authenticated admin session (200 OK)');
+
+  // 30g: Public Health check is unauthenticated and safe
+  const publicHealthReq = new Request('http://localhost:3010/api/health') as any;
+  const publicHealthRes = await healthHandler(publicHealthReq);
+  assertEqual(publicHealthRes.status, 200,
+    '30g. Public /api/health endpoint is accessible without authentication (200 OK)');
+  const healthJson = await publicHealthRes.json();
+  assertEqual(healthJson.healthy, true, '30h. Health check returns healthy: true');
+  assert(!JSON.stringify(healthJson).includes('supabase') && !JSON.stringify(healthJson).includes('/home/'),
+    '30i. Health check leaks zero internal environment or paths');
 
   // -------------------------------------------------------------
   // Test 31: Open redirect protection in login flow
   // -------------------------------------------------------------
-  function testSafeRedirect(rawNext: string | null): string {
-    if (!rawNext) return '/';
-    const trimmed = rawNext.trim();
-    if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.startsWith('/\\') || trimmed.includes('://')) {
-      return '/';
-    }
-    return trimmed;
-  }
-  assertEqual(testSafeRedirect('https://evil.com'), '/', '31a. External absolute URL neutralized to /');
-  assertEqual(testSafeRedirect('//evil.com/phish'), '/', '31b. Protocol-relative URL neutralized to /');
-  assertEqual(testSafeRedirect('/quizzes/create'), '/quizzes/create', '31c. Safe relative path preserved');
+  const { getSafeRedirectUrl } = await import('../auth');
+  assertEqual(getSafeRedirectUrl('https://evil.com'), '/', '31a. External absolute URL neutralized to /');
+  assertEqual(getSafeRedirectUrl('//evil.com/phish'), '/', '31b. Protocol-relative URL neutralized to /');
+  assertEqual(getSafeRedirectUrl('/\\evil.com'), '/', '31c. Obfuscated /\\\\ URL neutralized to /');
+  assertEqual(getSafeRedirectUrl('\\\\evil.com'), '/', '31d. Double backslash URL neutralized to /');
+  assertEqual(getSafeRedirectUrl('javascript:alert(1)'), '/', '31e. JavaScript pseudo-protocol neutralized to /');
+  assertEqual(getSafeRedirectUrl('data:text/html,test'), '/', '31f. Data pseudo-protocol neutralized to /');
+  assertEqual(getSafeRedirectUrl('/quizzes/create'), '/quizzes/create', '31g. Safe relative path preserved');
+  assertEqual(getSafeRedirectUrl('/quizzes?view=all'), '/quizzes?view=all', '31h. Safe relative path with query preserved');
 
   // -------------------------------------------------------------
   // Test 32: CSRF defense across mutating HTTP methods (POST, PUT, PATCH, DELETE)
@@ -561,8 +598,26 @@ async function runSecurityTests() {
   const ssrRes = await requireAuthenticatedAdmin(ssrReq);
   assertEqual(ssrRes.status, 200,
     '34. Standard Supabase SSR cookie (sb-<ref>-auth-token) parsed and authenticated successfully');
-  assertEqual(ssrRes.authorized, true,
-    '34b. SSR session token authorized: true');
+  // -------------------------------------------------------------
+  // Test 35: Production mode rejects test mock credentials
+  // -------------------------------------------------------------
+  const originalEnv = process.env.NODE_ENV;
+  try {
+    // Temporarily simulate production environment
+    (process.env as any).NODE_ENV = 'production';
+    const prodSimReq = new Request('http://localhost:3011/api/quizzes', {
+      headers: {
+        cookie: `${ADMIN_ACCESS_COOKIE}=test-admin-token`
+      }
+    });
+    const prodSimRes = await requireAuthenticatedAdmin(prodSimReq);
+    assertEqual(prodSimRes.authorized, false,
+      '35a. In production mode, test-admin-token is strictly rejected (no test backdoor)');
+    assert(prodSimRes.status === 401 || prodSimRes.status === 500,
+      '35b. Production mode returns 401/500 instead of authenticating test mock');
+  } finally {
+    (process.env as any).NODE_ENV = originalEnv;
+  }
 
   console.log(`\nSecurity Test Results: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {

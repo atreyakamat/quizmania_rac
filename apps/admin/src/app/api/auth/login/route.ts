@@ -33,13 +33,19 @@ export async function POST(request: Request) {
     );
   }
 
-  // 3. Parse and validate request body
+  // 3. Parse and strictly validate request payload
   let email = '';
   let password = '';
   try {
     const body = await request.json();
-    email = (body.email || '').trim().toLowerCase();
-    password = body.password || '';
+    if (typeof body.email !== 'string' || typeof body.password !== 'string') {
+      return NextResponse.json(
+        { success: false, error: 'Invalid email or password format' },
+        { status: 400 }
+      );
+    }
+    email = body.email.trim().toLowerCase();
+    password = body.password;
   } catch {
     return NextResponse.json(
       { success: false, error: 'Invalid JSON request payload' },
@@ -54,8 +60,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // 4. Automated Test & Mock Environment Handling
-  if (process.env.FORCE_MOCK_STORE === 'true' || process.env.NODE_ENV === 'test') {
+  // 4. Test Runner Isolation (ONLY active in automated Vitest test runner, NEVER in production or dev server)
+  if (process.env.NODE_ENV === 'test') {
     const adminRecord = await getAdminUserRecord(email);
     if (!adminRecord) {
       return NextResponse.json(
@@ -78,14 +84,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Generic password check for mock test accounts
-    if (password !== 'admin123' && password !== 'test-password') {
-      return NextResponse.json(
-        { success: false, error: 'Invalid email or password' },
-        { status: 401 }
-      );
-    }
-
     const response = NextResponse.json({
       success: true,
       user: {
@@ -104,42 +102,9 @@ export async function POST(request: Request) {
     return response;
   }
 
-  // 5. Supabase Auth Verification
+  // 5. Supabase Auth Verification (Real running environment)
   const supabase = getSupabasePublicClient();
   if (!supabase) {
-    // Development fallback when Supabase is not configured
-    if (process.env.NODE_ENV !== 'production') {
-      const adminRecord = await getAdminUserRecord(email);
-      if (
-        adminRecord &&
-        adminRecord.enabled !== false &&
-        (adminRecord.role === 'admin' || adminRecord.role === 'superadmin') &&
-        (password === 'admin123' || password === 'test-password')
-      ) {
-        const response = NextResponse.json({
-          success: true,
-          user: {
-            id: adminRecord.user_id || adminRecord.id,
-            email: adminRecord.email,
-            role: adminRecord.role,
-          },
-        });
-
-        attachSessionCookies(response, {
-          accessToken: 'test-admin-token',
-          refreshToken: 'valid-refresh-token',
-          expiresIn: 3600,
-        });
-
-        return response;
-      }
-
-      return NextResponse.json(
-        { success: false, error: 'Invalid email or password' },
-        { status: 401 }
-      );
-    }
-
     return NextResponse.json(
       { success: false, error: 'Authentication service unavailable' },
       { status: 500 }
@@ -153,61 +118,30 @@ export async function POST(request: Request) {
     });
 
     if (error || !data.user || !data.session) {
-      // In local dev with mock store fallback
-      if (process.env.NODE_ENV !== 'production') {
-        const adminRecord = await getAdminUserRecord(email);
-        if (
-          adminRecord &&
-          adminRecord.enabled !== false &&
-          (adminRecord.role === 'admin' || adminRecord.role === 'superadmin') &&
-          password === 'admin123'
-        ) {
-          const response = NextResponse.json({
-            success: true,
-            user: {
-              id: adminRecord.user_id || adminRecord.id,
-              email: adminRecord.email,
-              role: adminRecord.role,
-            },
-          });
-
-          attachSessionCookies(response, {
-            accessToken: 'test-admin-token',
-            refreshToken: 'valid-refresh-token',
-            expiresIn: 3600,
-          });
-
-          return response;
-        }
-      }
-
-      // Generic error message: never reveal whether account exists
+      // Generic error response: never reveal whether account exists
       return NextResponse.json(
         { success: false, error: 'Invalid email or password' },
         { status: 401 }
       );
     }
 
-    // 6. Enforce Explicit Admin Authorization (NO domain-based allowance)
+    // 6. Enforce Explicit Admin Authorization (NO domain-based or metadata-only allowance)
     const authCheck = await verifyAdminAuthorization(
       data.user.id,
-      data.user.email || email,
-      {
-        ...data.user.user_metadata,
-        ...data.user.app_metadata,
-      }
+      data.user.email || email
     );
 
     if (!authCheck.authorized) {
-      // Proactively invalidate the authenticated session since the user is not an admin
+      // Invalidate authenticated session immediately since user has no admin rights
       try {
         await supabase.auth.signOut();
-      } catch {
-        // Continue
-      }
+      } catch {}
 
       return NextResponse.json(
-        { success: false, error: authCheck.reason || 'Access denied: Your account does not have administrator privileges.' },
+        {
+          success: false,
+          error: authCheck.reason || 'Access denied: Your account does not have administrator privileges.'
+        },
         { status: 403 }
       );
     }
@@ -230,7 +164,7 @@ export async function POST(request: Request) {
 
     return response;
   } catch (err) {
-    console.error('Login error:', err);
+    console.error('Login authentication error occurred');
     return NextResponse.json(
       { success: false, error: 'An unexpected authentication error occurred' },
       { status: 500 }

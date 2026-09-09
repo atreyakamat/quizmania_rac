@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { importQuizFromJson } from '@quizmania/shared';
 import { validateQuizJson } from '@quizmania/quiz-schema';
 import type { QuizJsonImportFormat } from '@quizmania/types';
-import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
+import { adminJsonResponse, requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     }
 
     const createdQuiz = await importQuizFromJson(parsedData);
-    return NextResponse.json({ success: true, quiz: createdQuiz });
+    return adminJsonResponse({ success: true, quiz: createdQuiz }, auth);
   } catch (err) {
     console.error('Error importing quiz:', err);
     return NextResponse.json(

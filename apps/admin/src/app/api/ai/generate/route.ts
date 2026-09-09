@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runQuizGenerationPipeline } from '@/lib/ollama/pipeline';
-import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
+import { adminJsonResponse, requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 import { checkRateLimit, getClientIp } from '@quizmania/shared';
 
 export const dynamic = 'force-dynamic';
@@ -117,13 +117,13 @@ export async function POST(req: NextRequest) {
       }, { status });
     }
 
-    return NextResponse.json({
+    return adminJsonResponse({
       success: true,
       quiz: result.data || result.quiz,
       summary: result.summary,
       json: result.json,
       questionCount: result.questionCount
-    });
+    }, auth);
   } catch (err) {
     return NextResponse.json({
       success: false,

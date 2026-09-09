@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkRateLimit, getClientIp } from '@quizmania/shared';
+import { requireAuthenticatedAdmin, checkRateLimit, getClientIp } from '@quizmania/shared';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Private internal diagnostic / health check route.
+ * Internal Diagnostic / Health Check Route (Public App Workspace).
  * Strictly protected: Unauthenticated public access is rejected with 401 Unauthorized.
- * Requires internal authorization header (x-diagnostic-key or Authorization: Bearer).
+ * Requires authenticated administrator session with explicit admin_users authorization.
+ * Legacy diagnostic API keys (x-diagnostic-key) have been completely removed.
  */
 export async function GET(request: NextRequest) {
   // 1. Rate limiting
@@ -19,29 +20,16 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // 2. Private Authorization Guard
-  const authHeader = request.headers.get('authorization');
-  const diagKey = request.headers.get('x-diagnostic-key');
-  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
-
-  const expectedKey = process.env.DIAGNOSTIC_API_KEY || 
-                      process.env.INTERNAL_DIAGNOSTIC_KEY || 
-                      (process.env.NODE_ENV !== 'production' ? 'quizmania-internal-diag' : undefined);
-  const providedKey = diagKey || bearerToken;
-
-  const isAuthorized = Boolean(
-    providedKey &&
-    ((expectedKey && providedKey === expectedKey) || (process.env.NODE_ENV !== 'production' && providedKey === 'test-diag-key'))
-  );
-
-  if (!isAuthorized) {
+  // 2. Administrator Authorization Guard (Uses identical admin session verification)
+  const auth = await requireAuthenticatedAdmin(request);
+  if (!auth.authorized) {
     return NextResponse.json(
       {
         success: false,
-        error: 'Unauthorized: Diagnostic endpoint is private and requires administrator authorization.'
+        error: auth.error || 'Unauthorized: Diagnostic endpoint is private and requires administrator authorization.'
       },
       {
-        status: 401,
+        status: auth.status,
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
         }

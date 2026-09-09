@@ -46,8 +46,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // 3. Automated Test & Mock Handling
-  if (process.env.FORCE_MOCK_STORE === 'true' || process.env.NODE_ENV === 'test' || refreshToken === 'valid-refresh-token') {
+  // 3. Automated Test & Mock Handling (ONLY in test runner, NEVER in production)
+  if (process.env.NODE_ENV === 'test') {
     if (refreshToken === 'valid-refresh-token') {
       const response = NextResponse.json({
         success: true,
@@ -99,11 +99,7 @@ export async function POST(request: Request) {
     // 5. Re-verify explicit admin authorization
     const authCheck = await verifyAdminAuthorization(
       data.user.id,
-      data.user.email || '',
-      {
-        ...data.user.user_metadata,
-        ...data.user.app_metadata,
-      }
+      data.user.email || ''
     );
 
     if (!authCheck.authorized) {

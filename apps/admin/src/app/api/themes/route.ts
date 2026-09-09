@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAllThemes, saveTheme } from '@quizmania/shared';
 import type { Theme } from '@quizmania/types';
-import { requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
+import { adminJsonResponse, requireAuthenticatedAdmin, unauthorizedResponse } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 
   try {
     const themes = await getAllThemes();
-    return NextResponse.json({ success: true, themes });
+    return adminJsonResponse({ success: true, themes }, auth);
   } catch (err) {
     console.error('Error fetching themes:', err);
     return NextResponse.json(
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     }
 
     const savedTheme = await saveTheme(themeData);
-    return NextResponse.json({ success: true, theme: savedTheme });
+    return adminJsonResponse({ success: true, theme: savedTheme }, auth);
   } catch (err) {
     console.error('Error saving theme:', err);
     return NextResponse.json(
