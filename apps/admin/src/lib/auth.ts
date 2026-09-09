@@ -29,10 +29,24 @@ export interface RequireAdminResult {
 }
 
 /**
+ * Extracts Supabase project reference to support standard Supabase SSR cookie formats
+ */
+export function getSupabaseProjectRef(): string | null {
+  try {
+    const urlStr = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://eaqmwvxggnyprletpklr.supabase.co';
+    const url = new URL(urlStr);
+    const hostParts = url.hostname.split('.');
+    return hostParts[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Standard Cookie serialization options enforcing HttpOnly, SameSite, Secure flags and lifecycle.
  */
-export function getAdminCookieOptions(type: 'access' | 'refresh', expiresIn?: number) {
-  const isProd = process.env.NODE_ENV === 'production';
+export function getAdminCookieOptions(type: 'access' | 'refresh', expiresIn?: number, forceSecure?: boolean) {
+  const isProd = forceSecure !== undefined ? forceSecure : (process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production');
   return {
     httpOnly: true,
     secure: isProd,
@@ -45,24 +59,41 @@ export function getAdminCookieOptions(type: 'access' | 'refresh', expiresIn?: nu
 /**
  * Attaches both access and refresh cookies to a NextResponse.
  */
-export function attachSessionCookies(response: NextResponse, tokens: SessionTokens): NextResponse {
+export function attachSessionCookies(response: NextResponse, tokens: SessionTokens, forceSecure?: boolean): NextResponse {
+  const cookieOptsAccess = getAdminCookieOptions('access', tokens.expiresIn, forceSecure);
+  const cookieOptsRefresh = getAdminCookieOptions('refresh', undefined, forceSecure);
+
   response.cookies.set({
     name: ADMIN_ACCESS_COOKIE,
     value: tokens.accessToken,
-    ...getAdminCookieOptions('access', tokens.expiresIn)
+    ...cookieOptsAccess
   });
   // Maintain legacy cookie name for backwards compatibility
   response.cookies.set({
     name: ADMIN_LEGACY_COOKIE,
     value: tokens.accessToken,
-    ...getAdminCookieOptions('access', tokens.expiresIn)
+    ...cookieOptsAccess
   });
   if (tokens.refreshToken) {
     response.cookies.set({
       name: ADMIN_REFRESH_COOKIE,
       value: tokens.refreshToken,
-      ...getAdminCookieOptions('refresh')
+      ...cookieOptsRefresh
     });
+    // Set standard Supabase SSR session format cookie sb-<ref>-auth-token
+    const ref = getSupabaseProjectRef();
+    if (ref) {
+      try {
+        const sessionPayload = JSON.stringify([tokens.accessToken, tokens.refreshToken]);
+        response.cookies.set({
+          name: `sb-${ref}-auth-token`,
+          value: sessionPayload,
+          ...cookieOptsRefresh
+        });
+      } catch {
+        // Safe fallback
+      }
+    }
   }
   return response;
 }
@@ -70,10 +101,11 @@ export function attachSessionCookies(response: NextResponse, tokens: SessionToke
 /**
  * Clears all admin session cookies upon logout or session invalidation.
  */
-export function clearSessionCookies(response: NextResponse): NextResponse {
+export function clearSessionCookies(response: NextResponse, forceSecure?: boolean): NextResponse {
+  const isProd = forceSecure !== undefined ? forceSecure : (process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production');
   const expiredOpts = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProd,
     sameSite: 'lax' as const,
     path: '/',
     maxAge: 0,
@@ -82,6 +114,10 @@ export function clearSessionCookies(response: NextResponse): NextResponse {
   response.cookies.set({ name: ADMIN_ACCESS_COOKIE, value: '', ...expiredOpts });
   response.cookies.set({ name: ADMIN_REFRESH_COOKIE, value: '', ...expiredOpts });
   response.cookies.set({ name: ADMIN_LEGACY_COOKIE, value: '', ...expiredOpts });
+  const ref = getSupabaseProjectRef();
+  if (ref) {
+    response.cookies.set({ name: `sb-${ref}-auth-token`, value: '', ...expiredOpts });
+  }
   return response;
 }
 
@@ -221,6 +257,33 @@ export async function requireAuthenticatedAdmin(request: Request): Promise<Requi
   if (accessMatch) {
     accessToken = decodeURIComponent(accessMatch[1]);
   }
+  // Extract refresh token
+  const refreshMatch = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_REFRESH_COOKIE}=([^;]+)`));
+  if (refreshMatch) {
+    refreshToken = decodeURIComponent(refreshMatch[1]);
+  }
+
+  // Check standard Supabase SSR cookie format sb-<ref>-auth-token
+  const ref = getSupabaseProjectRef();
+  if (ref && (!accessToken || !refreshToken)) {
+    const ssrMatch = cookieHeader.match(new RegExp(`(?:^|;\\s*)sb-${ref}-auth-token=([^;]+)`));
+    if (ssrMatch) {
+      try {
+        const decoded = decodeURIComponent(ssrMatch[1]);
+        const parsed = JSON.parse(decoded);
+        if (Array.isArray(parsed) && parsed.length >= 2) {
+          if (!accessToken) accessToken = parsed[0];
+          if (!refreshToken) refreshToken = parsed[1];
+        } else if (parsed && typeof parsed === 'object') {
+          if (!accessToken && parsed.access_token) accessToken = parsed.access_token;
+          if (!refreshToken && parsed.refresh_token) refreshToken = parsed.refresh_token;
+        }
+      } catch {
+        // Safe fallback
+      }
+    }
+  }
+
   if (!accessToken) {
     const legacyMatch = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_LEGACY_COOKIE}=([^;]+)`));
     if (legacyMatch) {
@@ -228,11 +291,6 @@ export async function requireAuthenticatedAdmin(request: Request): Promise<Requi
     }
   }
 
-  // Extract refresh token
-  const refreshMatch = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_REFRESH_COOKIE}=([^;]+)`));
-  if (refreshMatch) {
-    refreshToken = decodeURIComponent(refreshMatch[1]);
-  }
   if (!refreshToken) {
     const refreshHeader = request.headers.get('x-refresh-token');
     if (refreshHeader) {

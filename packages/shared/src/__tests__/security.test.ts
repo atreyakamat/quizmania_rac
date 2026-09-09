@@ -442,17 +442,40 @@ async function runSecurityTests() {
     '28. Expired access token without refresh token rejected with 401 Unauthorized');
 
   // -------------------------------------------------------------
-  // Test 29: Production cookie flags verification
+  // Test 29: Production cookie flags verification (Secure, HttpOnly, SameSite, Max-Age)
   // -------------------------------------------------------------
-  const accessOpts = getAdminCookieOptions('access', 3600);
-  assertEqual(accessOpts.httpOnly, true, '29a. Access cookie enforces httpOnly: true');
-  assertEqual(accessOpts.sameSite, 'lax', '29b. Access cookie enforces sameSite: lax');
-  assertEqual(accessOpts.path, '/', '29c. Access cookie enforces path: /');
-  assertEqual(accessOpts.maxAge, 3600, '29d. Access cookie maxAge matches 1-hour expiration');
+  const { attachSessionCookies, clearSessionCookies } = await import('../../../../apps/admin/src/lib/auth');
+  const { NextResponse } = await import('next/server');
 
-  const refreshOpts = getAdminCookieOptions('refresh');
-  assertEqual(refreshOpts.httpOnly, true, '29e. Refresh cookie enforces httpOnly: true');
-  assertEqual(refreshOpts.maxAge, 60 * 60 * 24 * 30, '29f. Refresh cookie maxAge matches 30-day lifecycle');
+  // Check production options
+  const prodAccessOpts = getAdminCookieOptions('access', 3600, true);
+  assertEqual(prodAccessOpts.httpOnly, true, '29a. Production access cookie enforces httpOnly: true');
+  assertEqual(prodAccessOpts.secure, true, '29b. Production access cookie enforces secure: true');
+  assertEqual(prodAccessOpts.sameSite, 'lax', '29c. Production access cookie enforces sameSite: lax');
+  assertEqual(prodAccessOpts.path, '/', '29d. Production access cookie enforces path: /');
+  assertEqual(prodAccessOpts.maxAge, 3600, '29e. Production access cookie maxAge matches 1 hour');
+
+  const prodRefreshOpts = getAdminCookieOptions('refresh', undefined, true);
+  assertEqual(prodRefreshOpts.httpOnly, true, '29f. Production refresh cookie enforces httpOnly: true');
+  assertEqual(prodRefreshOpts.secure, true, '29g. Production refresh cookie enforces secure: true');
+  assertEqual(prodRefreshOpts.maxAge, 60 * 60 * 24 * 30, '29h. Production refresh cookie maxAge matches 30 days');
+
+  // Check development options (secure is false for local HTTP)
+  const devAccessOpts = getAdminCookieOptions('access', 3600, false);
+  assertEqual(devAccessOpts.secure, false, '29i. Development cookie allows secure: false for localhost');
+
+  // Verify actual Set-Cookie string serialization in production mode
+  const testProdResponse = NextResponse.json({ test: true });
+  attachSessionCookies(testProdResponse, {
+    accessToken: 'test-prod-access-token',
+    refreshToken: 'test-prod-refresh-token',
+    expiresIn: 3600
+  }, true);
+
+  const setCookieHeader = testProdResponse.headers.get('set-cookie') || '';
+  assert(setCookieHeader.includes('Secure'), '29j. Production Set-Cookie header contains Secure attribute');
+  assert(setCookieHeader.includes('HttpOnly'), '29k. Production Set-Cookie header contains HttpOnly attribute');
+  assert(/samesite=lax/i.test(setCookieHeader), '29l. Production Set-Cookie header contains SameSite=Lax attribute');
 
   // -------------------------------------------------------------
   // Test 30: Public Diagnostic endpoint private access control
@@ -463,12 +486,19 @@ async function runSecurityTests() {
   assertEqual(diagResponse.status, 401,
     '30. Public diagnostic endpoint rejects unauthenticated caller with 401 Unauthorized');
 
+  const wrongKeyDiagReq = new Request('http://localhost:3010/api/diagnostic', {
+    headers: { 'x-diagnostic-key': 'wrong-unauthorized-key' }
+  }) as any;
+  const wrongKeyDiagResponse = await diagnosticHandler(wrongKeyDiagReq);
+  assertEqual(wrongKeyDiagResponse.status, 401,
+    '30b. Public diagnostic endpoint rejects invalid key with 401 Unauthorized');
+
   const authorizedDiagReq = new Request('http://localhost:3010/api/diagnostic', {
     headers: { 'x-diagnostic-key': 'test-diag-key' }
   }) as any;
   const authorizedDiagResponse = await diagnosticHandler(authorizedDiagReq);
   assertEqual(authorizedDiagResponse.status, 200,
-    '30b. Authorized internal caller receives diagnostic status 200');
+    '30c. Authorized internal caller receives diagnostic status 200');
 
   // -------------------------------------------------------------
   // Test 31: Open redirect protection in login flow
@@ -484,6 +514,55 @@ async function runSecurityTests() {
   assertEqual(testSafeRedirect('https://evil.com'), '/', '31a. External absolute URL neutralized to /');
   assertEqual(testSafeRedirect('//evil.com/phish'), '/', '31b. Protocol-relative URL neutralized to /');
   assertEqual(testSafeRedirect('/quizzes/create'), '/quizzes/create', '31c. Safe relative path preserved');
+
+  // -------------------------------------------------------------
+  // Test 32: CSRF defense across mutating HTTP methods (POST, PUT, PATCH, DELETE)
+  // -------------------------------------------------------------
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+    const csrfReq = new Request('http://localhost:3011/api/quizzes', {
+      method,
+      headers: {
+        origin: 'https://evil-attacker.com',
+        host: 'localhost:3011',
+        cookie: `${ADMIN_ACCESS_COOKIE}=test-admin-token`
+      }
+    });
+    const csrfRes = await requireAuthenticatedAdmin(csrfReq);
+    assertEqual(csrfRes.status, 403,
+      `32. Cross-origin ${method} mutation rejected by CSRF origin verification`);
+    assertEqual(csrfRes.authorized, false,
+      `32b. Cross-origin ${method} mutation has authorized: false`);
+  }
+
+  // -------------------------------------------------------------
+  // Test 33: Logout invalidation & cookie clearance
+  // -------------------------------------------------------------
+  const testLogoutResponse = NextResponse.json({ success: true });
+  clearSessionCookies(testLogoutResponse, true);
+  const clearCookieHeader = testLogoutResponse.headers.get('set-cookie') || '';
+  assert(clearCookieHeader.includes('Max-Age=0') || clearCookieHeader.includes('max-age=0'),
+    '33a. clearSessionCookies sets Max-Age=0 on cookies');
+  assert(clearCookieHeader.includes('sb-access-token=;'),
+    '33b. clearSessionCookies empties sb-access-token');
+  assert(clearCookieHeader.includes('sb-refresh-token=;'),
+    '33c. clearSessionCookies empties sb-refresh-token');
+
+  // -------------------------------------------------------------
+  // Test 34: Standard Supabase SSR cookie (sb-<ref>-auth-token) parsing
+  // -------------------------------------------------------------
+  const { getSupabaseProjectRef } = await import('../../../../apps/admin/src/lib/auth');
+  const projectRef = getSupabaseProjectRef() || 'eaqmwvxggnyprletpklr';
+  const ssrCookiePayload = encodeURIComponent(JSON.stringify(['test-admin-token', 'valid-refresh-token']));
+  const ssrReq = new Request('http://localhost:3011/api/quizzes', {
+    headers: {
+      cookie: `sb-${projectRef}-auth-token=${ssrCookiePayload}`
+    }
+  });
+  const ssrRes = await requireAuthenticatedAdmin(ssrReq);
+  assertEqual(ssrRes.status, 200,
+    '34. Standard Supabase SSR cookie (sb-<ref>-auth-token) parsed and authenticated successfully');
+  assertEqual(ssrRes.authorized, true,
+    '34b. SSR session token authorized: true');
 
   console.log(`\nSecurity Test Results: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {

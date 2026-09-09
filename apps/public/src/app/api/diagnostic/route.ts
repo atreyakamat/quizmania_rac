@@ -24,10 +24,15 @@ export async function GET(request: NextRequest) {
   const diagKey = request.headers.get('x-diagnostic-key');
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
 
-  const expectedKey = process.env.DIAGNOSTIC_API_KEY || process.env.INTERNAL_DIAGNOSTIC_KEY || 'quizmania-internal-diag';
+  const expectedKey = process.env.DIAGNOSTIC_API_KEY || 
+                      process.env.INTERNAL_DIAGNOSTIC_KEY || 
+                      (process.env.NODE_ENV !== 'production' ? 'quizmania-internal-diag' : undefined);
   const providedKey = diagKey || bearerToken;
 
-  const isAuthorized = providedKey && (providedKey === expectedKey || providedKey === 'test-diag-key');
+  const isAuthorized = Boolean(
+    providedKey &&
+    ((expectedKey && providedKey === expectedKey) || (process.env.NODE_ENV !== 'production' && providedKey === 'test-diag-key'))
+  );
 
   if (!isAuthorized) {
     return NextResponse.json(

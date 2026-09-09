@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { checkRateLimit, getClientIp, getSupabasePublicClient } from '@quizmania/shared';
+import { checkRateLimit, getClientIp, getSupabasePublicClient, getAdminUserRecord } from '@quizmania/shared';
 import {
   attachSessionCookies,
   verifyAdminAuthorization,
@@ -56,81 +56,88 @@ export async function POST(request: Request) {
 
   // 4. Automated Test & Mock Environment Handling
   if (process.env.FORCE_MOCK_STORE === 'true' || process.env.NODE_ENV === 'test') {
-    if (email === 'admin@quizmania.dev' && (password === 'admin123' || password === 'test-password')) {
-      const authCheck = await verifyAdminAuthorization(
-        '00000000-0000-4000-a000-000000000001',
-        'admin@quizmania.dev',
-        { role: 'admin' }
+    const adminRecord = await getAdminUserRecord(email);
+    if (!adminRecord) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid email or password' },
+        { status: 401 }
       );
-
-      if (!authCheck.authorized) {
-        return NextResponse.json(
-          { success: false, error: authCheck.reason || 'Access denied' },
-          { status: 403 }
-        );
-      }
-
-      const response = NextResponse.json({
-        success: true,
-        user: {
-          id: '00000000-0000-4000-a000-000000000001',
-          email: 'admin@quizmania.dev',
-          role: authCheck.role || 'admin',
-        },
-      });
-
-      attachSessionCookies(response, {
-        accessToken: 'test-admin-token',
-        refreshToken: 'valid-refresh-token',
-        expiresIn: 3600,
-      });
-
-      return response;
     }
 
-    if (email === 'disabled-admin@quizmania.dev') {
+    if (adminRecord.enabled === false) {
       return NextResponse.json(
         { success: false, error: 'Administrator account is disabled' },
         { status: 403 }
       );
     }
 
-    if (email === 'user@example.com' && (password === 'password123' || password === 'admin123')) {
-      // Authenticated user, but NOT an authorized admin
+    if (adminRecord.role !== 'admin' && adminRecord.role !== 'superadmin') {
       return NextResponse.json(
         { success: false, error: 'Access denied: Your account does not have administrator privileges.' },
         { status: 403 }
       );
     }
 
-    // Generic invalid credential response (no user enumeration)
-    return NextResponse.json(
-      { success: false, error: 'Invalid email or password' },
-      { status: 401 }
-    );
+    // Generic password check for mock test accounts
+    if (password !== 'admin123' && password !== 'test-password') {
+      return NextResponse.json(
+        { success: false, error: 'Invalid email or password' },
+        { status: 401 }
+      );
+    }
+
+    const response = NextResponse.json({
+      success: true,
+      user: {
+        id: adminRecord.user_id || adminRecord.id,
+        email: adminRecord.email,
+        role: adminRecord.role,
+      },
+    });
+
+    attachSessionCookies(response, {
+      accessToken: 'test-admin-token',
+      refreshToken: 'valid-refresh-token',
+      expiresIn: 3600,
+    });
+
+    return response;
   }
 
   // 5. Supabase Auth Verification
   const supabase = getSupabasePublicClient();
   if (!supabase) {
     // Development fallback when Supabase is not configured
-    if (process.env.NODE_ENV !== 'production' && email === 'admin@quizmania.dev' && password === 'admin123') {
-      const response = NextResponse.json({
-        success: true,
-        user: {
-          id: '00000000-0000-4000-a000-000000000001',
-          email: 'admin@quizmania.dev',
-          role: 'admin',
-        },
-      });
+    if (process.env.NODE_ENV !== 'production') {
+      const adminRecord = await getAdminUserRecord(email);
+      if (
+        adminRecord &&
+        adminRecord.enabled !== false &&
+        (adminRecord.role === 'admin' || adminRecord.role === 'superadmin') &&
+        (password === 'admin123' || password === 'test-password')
+      ) {
+        const response = NextResponse.json({
+          success: true,
+          user: {
+            id: adminRecord.user_id || adminRecord.id,
+            email: adminRecord.email,
+            role: adminRecord.role,
+          },
+        });
 
-      attachSessionCookies(response, {
-        accessToken: 'test-admin-token',
-        refreshToken: 'valid-refresh-token',
-        expiresIn: 3600,
-      });
+        attachSessionCookies(response, {
+          accessToken: 'test-admin-token',
+          refreshToken: 'valid-refresh-token',
+          expiresIn: 3600,
+        });
 
-      return response;
+        return response;
+      }
+
+      return NextResponse.json(
+        { success: false, error: 'Invalid email or password' },
+        { status: 401 }
+      );
     }
 
     return NextResponse.json(
@@ -146,28 +153,32 @@ export async function POST(request: Request) {
     });
 
     if (error || !data.user || !data.session) {
-      // In local dev with default test credentials fallback
-      if (
-        process.env.NODE_ENV !== 'production' &&
-        email === 'admin@quizmania.dev' &&
-        password === 'admin123'
-      ) {
-        const response = NextResponse.json({
-          success: true,
-          user: {
-            id: 'local-dev-admin',
-            email: 'admin@quizmania.dev',
-            role: 'admin',
-          },
-        });
+      // In local dev with mock store fallback
+      if (process.env.NODE_ENV !== 'production') {
+        const adminRecord = await getAdminUserRecord(email);
+        if (
+          adminRecord &&
+          adminRecord.enabled !== false &&
+          (adminRecord.role === 'admin' || adminRecord.role === 'superadmin') &&
+          password === 'admin123'
+        ) {
+          const response = NextResponse.json({
+            success: true,
+            user: {
+              id: adminRecord.user_id || adminRecord.id,
+              email: adminRecord.email,
+              role: adminRecord.role,
+            },
+          });
 
-        attachSessionCookies(response, {
-          accessToken: 'test-admin-token',
-          refreshToken: 'valid-refresh-token',
-          expiresIn: 3600,
-        });
+          attachSessionCookies(response, {
+            accessToken: 'test-admin-token',
+            refreshToken: 'valid-refresh-token',
+            expiresIn: 3600,
+          });
 
-        return response;
+          return response;
+        }
       }
 
       // Generic error message: never reveal whether account exists
@@ -188,6 +199,13 @@ export async function POST(request: Request) {
     );
 
     if (!authCheck.authorized) {
+      // Proactively invalidate the authenticated session since the user is not an admin
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // Continue
+      }
+
       return NextResponse.json(
         { success: false, error: authCheck.reason || 'Access denied: Your account does not have administrator privileges.' },
         { status: 403 }

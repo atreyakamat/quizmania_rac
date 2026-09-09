@@ -63,7 +63,16 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     checkAuth();
-  }, [checkAuth]);
+
+    // Proactive background session refresh every 15 minutes to keep access token fresh
+    const interval = setInterval(() => {
+      if (pathname !== '/login') {
+        checkAuth();
+      }
+    }, 15 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [checkAuth, pathname]);
 
   const logout = async () => {
     try {
