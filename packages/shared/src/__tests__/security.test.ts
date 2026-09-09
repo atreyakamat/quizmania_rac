@@ -1,6 +1,8 @@
 process.env.FORCE_MOCK_STORE = 'true';
 process.env.NODE_ENV = 'test';
 
+import fs from 'fs';
+import path from 'path';
 import {
   saveQuiz,
   getPublishedQuizBySlug,
@@ -10,9 +12,10 @@ import {
   scoreAndRecordQuizSubmission,
   getSupabaseServiceKey,
   isSupabaseAdminConfigured,
+  getResponsesPaginated,
   mockStore
 } from '../index';
-import { validateQuizJson } from '@quizmania/quiz-schema';
+import { validateQuizJson, questionSchema, quizSettingsSchema } from '@quizmania/quiz-schema';
 import type { Quiz, Question, PublicQuiz } from '@quizmania/types';
 
 async function runSecurityTests() {
@@ -621,6 +624,211 @@ async function runSecurityTests() {
     (process.env as any).NODE_ENV = originalEnv;
     (process.env as any).ENABLE_TEST_AUTH = originalTestAuth;
   }
+
+  // -------------------------------------------------------------
+  // Test 36: Admin Server-Side Storage Upload API Route (/api/upload)
+  // -------------------------------------------------------------
+  const { POST: uploadHandler } = await import('../../../../apps/admin/src/app/api/upload/route');
+
+  // 36a: Unauthenticated upload request rejected (401)
+  const unauthUploadForm = new FormData();
+  unauthUploadForm.append('bucket', 'quiz-covers');
+  unauthUploadForm.append('file', new File(['binary-content'], 'test.png', { type: 'image/png' }));
+  const unauthUploadReq = new Request('http://localhost:3011/api/upload', {
+    method: 'POST',
+    headers: {
+      origin: 'http://localhost:3011',
+      host: 'localhost:3011'
+    },
+    body: unauthUploadForm
+  }) as any;
+  const unauthUploadRes = await uploadHandler(unauthUploadReq);
+  assertEqual(unauthUploadRes.status, 401, '36a. Unauthenticated upload request rejected with 401 Unauthorized');
+
+  // 36b: Cross-origin upload request rejected (403 CSRF)
+  const csrfUploadForm = new FormData();
+  csrfUploadForm.append('bucket', 'quiz-covers');
+  csrfUploadForm.append('file', new File(['binary-content'], 'test.png', { type: 'image/png' }));
+  const csrfUploadReq = new Request('http://localhost:3011/api/upload', {
+    method: 'POST',
+    headers: {
+      origin: 'https://attacker.evil.com',
+      host: 'localhost:3011',
+      cookie: `${ADMIN_ACCESS_COOKIE}=test-admin-token`
+    },
+    body: csrfUploadForm
+  }) as any;
+  const csrfUploadRes = await uploadHandler(csrfUploadReq);
+  assertEqual(csrfUploadRes.status, 403, '36b. Cross-origin upload request rejected with 403 Forbidden (CSRF)');
+
+  // 36c: Missing file rejected (400)
+  const missingFileForm = new FormData();
+  missingFileForm.append('bucket', 'quiz-covers');
+  const missingFileReq = new Request('http://localhost:3011/api/upload', {
+    method: 'POST',
+    headers: {
+      origin: 'http://localhost:3011',
+      host: 'localhost:3011',
+      cookie: `${ADMIN_ACCESS_COOKIE}=test-admin-token`
+    },
+    body: missingFileForm
+  }) as any;
+  const missingFileRes = await uploadHandler(missingFileReq);
+  assertEqual(missingFileRes.status, 400, '36c. Upload request without file rejected with 400 Bad Request');
+
+  // 36d: Disallowed bucket rejected (400)
+  const badBucketForm = new FormData();
+  badBucketForm.append('bucket', 'confidential-docs' as any);
+  badBucketForm.append('file', new File(['content'], 'test.png', { type: 'image/png' }));
+  const badBucketReq = new Request('http://localhost:3011/api/upload', {
+    method: 'POST',
+    headers: {
+      origin: 'http://localhost:3011',
+      host: 'localhost:3011',
+      cookie: `${ADMIN_ACCESS_COOKIE}=test-admin-token`
+    },
+    body: badBucketForm
+  }) as any;
+  const badBucketRes = await uploadHandler(badBucketReq);
+  assertEqual(badBucketRes.status, 400, '36d. Upload to unlisted bucket rejected with 400 Bad Request');
+
+  // 36e: Disallowed MIME type rejected (400)
+  const badMimeForm = new FormData();
+  badMimeForm.append('bucket', 'quiz-covers');
+  badMimeForm.append('file', new File(['#!/bin/bash\necho pwned'], 'exploit.sh', { type: 'application/x-sh' }));
+  const badMimeReq = new Request('http://localhost:3011/api/upload', {
+    method: 'POST',
+    headers: {
+      origin: 'http://localhost:3011',
+      host: 'localhost:3011',
+      cookie: `${ADMIN_ACCESS_COOKIE}=test-admin-token`
+    },
+    body: badMimeForm
+  }) as any;
+  const badMimeRes = await uploadHandler(badMimeReq);
+  assertEqual(badMimeRes.status, 400, '36e. Upload with disallowed MIME type rejected with 400 Bad Request');
+
+  // 36f: Oversized file (>5MB) rejected (400)
+  const oversizedForm = new FormData();
+  oversizedForm.append('bucket', 'quiz-covers');
+  const oversizedBlob = new Blob([new Uint8Array(6 * 1024 * 1024)]);
+  oversizedForm.append('file', new File([oversizedBlob], 'huge.png', { type: 'image/png' }));
+  const oversizedReq = new Request('http://localhost:3011/api/upload', {
+    method: 'POST',
+    headers: {
+      origin: 'http://localhost:3011',
+      host: 'localhost:3011',
+      cookie: `${ADMIN_ACCESS_COOKIE}=test-admin-token`
+    },
+    body: oversizedForm
+  }) as any;
+  const oversizedRes = await uploadHandler(oversizedReq);
+  assertEqual(oversizedRes.status, 400, '36f. Upload exceeding 5MB size limit rejected with 400 Bad Request');
+
+  // 36g: Valid image upload with authenticated admin succeeds (200)
+  const validUploadForm = new FormData();
+  validUploadForm.append('bucket', 'quiz-covers');
+  validUploadForm.append('file', new File(['valid png data'], '../../path/traversal.png', { type: 'image/png' }));
+  const validUploadReq = new Request('http://localhost:3011/api/upload', {
+    method: 'POST',
+    headers: {
+      origin: 'http://localhost:3011',
+      host: 'localhost:3011',
+      cookie: `${ADMIN_ACCESS_COOKIE}=test-admin-token`
+    },
+    body: validUploadForm
+  }) as any;
+  const validUploadRes = await uploadHandler(validUploadReq);
+  assertEqual(validUploadRes.status, 200, '36g. Valid image upload with authenticated admin session succeeds (200 OK)');
+  const validUploadJson = await validUploadRes.json();
+  assertEqual(validUploadJson.success, true, '36h. Upload result contains success: true');
+  assert(!validUploadJson.path.includes('../'), '36i. Path traversal characters stripped from generated storage path');
+
+  // -------------------------------------------------------------
+  // Test 37: Database Row-Level & Column-Level Security Verification
+  // -------------------------------------------------------------
+  const repoRoot = path.resolve(__dirname, '../../../../');
+  const schemaSql = fs.readFileSync(path.join(repoRoot, 'supabase/schema.sql'), 'utf8');
+  const migrationSql = fs.readFileSync(path.join(repoRoot, 'supabase/migrations/20260909000004_fortify_rls_and_storage.sql'), 'utf8');
+
+  // 37a: Questions column-level security revoking accepted_answers
+  assert(schemaSql.includes('REVOKE SELECT ON public.questions FROM anon, authenticated;') &&
+         migrationSql.includes('REVOKE SELECT ON public.questions FROM anon, authenticated;') &&
+         !migrationSql.includes('accepted_answers,'),
+    '37a. Column-level security revokes SELECT on questions(accepted_answers) from anon and authenticated');
+
+  // 37b: Options column-level security revoking is_correct
+  assert(schemaSql.includes('REVOKE SELECT ON public.options FROM anon, authenticated;') &&
+         migrationSql.includes('REVOKE SELECT ON public.options FROM anon, authenticated;') &&
+         !migrationSql.includes('is_correct,'),
+    '37b. Column-level security revokes SELECT on options(is_correct) from anon and authenticated');
+
+  // 37c: Quiz attempts direct anon insert policy dropped
+  assert(migrationSql.includes('DROP POLICY IF EXISTS "Public can insert attempts" ON public.quiz_attempts;'),
+    '37c. Migration drops direct anonymous quiz attempt insert policy from Postgres');
+
+  // 37d: Submissions direct anon insert policy dropped
+  assert(migrationSql.includes('DROP POLICY IF EXISTS "Public can insert submissions" ON public.submissions;'),
+    '37d. Migration drops direct anonymous submission insert policy from Postgres');
+
+  // 37e: Answers direct anon insert policy dropped
+  assert(migrationSql.includes('DROP POLICY IF EXISTS "Public can insert answers" ON public.answers;'),
+    '37e. Migration drops direct anonymous answer insert policy from Postgres');
+
+  // 37f: Storage write access restricted to service_role
+  assert(schemaSql.includes('TO service_role') && migrationSql.includes('TO service_role'),
+    '37f. Storage policies restrict insert, update, and delete exclusively to service_role');
+
+  // 37g: Public projection getPublishedQuizBySlug strictly omits accepted_answers
+  const publishedQuizCheck = await getPublishedQuizBySlug(testSlug);
+  const qWithAccepted = publishedQuizCheck?.questions.some((q: any) => 'accepted_answers' in q);
+  assertEqual(qWithAccepted, false, '37g. Public projection getPublishedQuizBySlug strictly omits accepted_answers');
+
+  // 37h: Public projection getPublishedQuizBySlug strictly omits is_correct
+  const optWithCorrect = publishedQuizCheck?.questions.flatMap((q: any) => q.options || []).some((o: any) => 'is_correct' in o);
+  assertEqual(optWithCorrect, false, '37h. Public projection getPublishedQuizBySlug strictly omits is_correct');
+
+  // -------------------------------------------------------------
+  // Test 38: Resource Abuse & Input Boundary Defense
+  // -------------------------------------------------------------
+  // 38a: Negative pagination page clamped to 1
+  const paginatedNegPage = await getResponsesPaginated({ page: -5 });
+  assertEqual(paginatedNegPage.page, 1, '38a. Negative pagination page number clamped to 1');
+
+  // 38b: Massive pagination pageSize clamped to 100
+  const paginatedBigPage = await getResponsesPaginated({ pageSize: 999999 });
+  assertEqual(paginatedBigPage.pageSize, 100, '38b. Massive pagination pageSize clamped to maximum 100');
+
+  // 38c: Question schema rejects negative marks
+  const negMarksParsed = questionSchema.safeParse({
+    question_text: 'Test Question',
+    question_type: 'single_choice',
+    marks: -5,
+    options: [{ option_text: 'A', is_correct: true }, { option_text: 'B', is_correct: false }]
+  });
+  assertEqual(negMarksParsed.success, false, '38c. Question schema rejects negative marks');
+
+  // 38d: Question schema rejects negative negative_marks
+  const negNegMarksParsed = questionSchema.safeParse({
+    question_text: 'Test Question',
+    question_type: 'single_choice',
+    marks: 1,
+    negative_marks: -2,
+    options: [{ option_text: 'A', is_correct: true }, { option_text: 'B', is_correct: false }]
+  });
+  assertEqual(negNegMarksParsed.success, false, '38d. Question schema rejects negative negative_marks');
+
+  // 38e: Quiz settings schema rejects negative passing score percentage
+  const negPassingScoreParsed = quizSettingsSchema.safeParse({
+    passing_score_percentage: -15
+  });
+  assertEqual(negPassingScoreParsed.success, false, '38e. Quiz settings schema rejects negative passing score percentage');
+
+  // 38f: Quiz settings schema rejects passing score percentage > 100
+  const overPassingScoreParsed = quizSettingsSchema.safeParse({
+    passing_score_percentage: 150
+  });
+  assertEqual(overPassingScoreParsed.success, false, '38f. Quiz settings schema rejects passing score percentage > 100');
 
   console.log(`\nSecurity Test Results: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {

@@ -181,15 +181,24 @@ CREATE POLICY "Public can view published sections" ON public.sections FOR SELECT
 );
 CREATE POLICY "Admin full access sections" ON public.sections FOR ALL TO service_role USING (true);
 
--- Questions Policies
+-- Questions Policies (Hide accepted_answers from anon and authenticated)
+REVOKE SELECT ON public.questions FROM anon, authenticated;
+GRANT SELECT (
+  id, quiz_id, section_id, question_text, question_description,
+  question_type, question_image, marks, negative_marks, required,
+  question_order, section_title, section_description, time_limit_seconds,
+  scoring_method, case_sensitive, trim_whitespace, normalize_spaces,
+  question_settings, created_at, updated_at
+) ON public.questions TO anon, authenticated;
+
 CREATE POLICY "Public can view published questions" ON public.questions FOR SELECT TO anon, authenticated USING (
   EXISTS (SELECT 1 FROM public.quizzes q WHERE q.id = questions.quiz_id AND q.status = 'published')
 );
 CREATE POLICY "Admin full access questions" ON public.questions FOR ALL TO service_role USING (true);
 
--- Options Policies (Hide correct answer flags from anon)
-REVOKE SELECT ON public.options FROM anon;
-GRANT SELECT (id, question_id, option_text, option_image, option_order) ON public.options TO anon;
+-- Options Policies (Hide correct answer flags from anon and authenticated)
+REVOKE SELECT ON public.options FROM anon, authenticated;
+GRANT SELECT (id, question_id, option_text, option_image, option_order, created_at, updated_at) ON public.options TO anon, authenticated;
 
 CREATE POLICY "Public can view options for published quizzes" ON public.options FOR SELECT TO anon, authenticated USING (
   EXISTS (
@@ -200,21 +209,18 @@ CREATE POLICY "Public can view options for published quizzes" ON public.options 
 );
 CREATE POLICY "Admin full access options" ON public.options FOR ALL TO service_role USING (true);
 
--- Quiz Attempts Policies
-CREATE POLICY "Public can insert attempts" ON public.quiz_attempts FOR INSERT TO anon, authenticated WITH CHECK (true);
-CREATE POLICY "Public can update own attempts" ON public.quiz_attempts FOR UPDATE TO anon, authenticated USING (true);
-CREATE POLICY "Public can select own attempts" ON public.quiz_attempts FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY "Admin full access quiz_attempts" ON public.quiz_attempts FOR ALL TO service_role USING (true);
+-- Quiz Attempts Policies (Managed strictly server-side by Next.js API via service_role)
+-- Anonymous and untrusted client-side direct access is blocked.
+CREATE POLICY "Service role full access quiz_attempts" ON public.quiz_attempts FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- Submissions Policies
-CREATE POLICY "Public can insert submissions" ON public.submissions FOR INSERT TO anon, authenticated WITH CHECK (true);
-CREATE POLICY "Admin full access submissions" ON public.submissions FOR ALL TO service_role USING (true);
+-- Submissions Policies (Managed strictly server-side by authoritative scoring engine via service_role)
+-- Direct client-side inserts/updates are completely prohibited to prevent score tampering.
+CREATE POLICY "Service role full access submissions" ON public.submissions FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- Answers Policies
-CREATE POLICY "Public can insert answers" ON public.answers FOR INSERT TO anon, authenticated WITH CHECK (true);
-CREATE POLICY "Admin full access answers" ON public.answers FOR ALL TO service_role USING (true);
+-- Answers Policies (Managed strictly server-side by authoritative scoring engine via service_role)
+CREATE POLICY "Service role full access answers" ON public.answers FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- 10. STORAGE BUCKETS (Public Read)
+-- 10. STORAGE BUCKETS (Public Read, Admin/Server-Only Write)
 INSERT INTO storage.buckets (id, name, public)
 VALUES 
   ('quiz-covers', 'quiz-covers', true),
@@ -223,10 +229,14 @@ VALUES
   ('branding-assets', 'branding-assets', true)
 ON CONFLICT (id) DO NOTHING;
 
+-- Public read access for images in public buckets
 CREATE POLICY "Public Read Quiz Covers" ON storage.objects FOR SELECT TO public USING (bucket_id = 'quiz-covers');
 CREATE POLICY "Public Read Question Images" ON storage.objects FOR SELECT TO public USING (bucket_id = 'question-images');
 CREATE POLICY "Public Read Option Images" ON storage.objects FOR SELECT TO public USING (bucket_id = 'option-images');
 CREATE POLICY "Public Read Branding Assets" ON storage.objects FOR SELECT TO public USING (bucket_id = 'branding-assets');
+
+-- Uploads/Modifications/Deletions strictly restricted to service_role (Admin API route)
+CREATE POLICY "Service role full access storage" ON storage.objects FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- 11. DEFAULT THEMES SEED
 INSERT INTO public.themes (id, name, primary_color, secondary_color, background_color, surface_color, text_color, button_color, border_radius, font_family)

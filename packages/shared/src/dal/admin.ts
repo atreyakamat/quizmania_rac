@@ -754,9 +754,9 @@ export async function getResponsesPaginated(filters: ResponsesFilterParams = {})
     lowestScore
   };
 
-  // Pagination
+  // Pagination (clamped to prevent memory/resource abuse)
   const page = Math.max(1, Number(filters.page) || 1);
-  const pageSize = Math.max(1, Number(filters.pageSize) || 25);
+  const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize) || 25));
   const totalPages = Math.ceil(total / pageSize) || 1;
   const paginatedItems = items.slice((page - 1) * pageSize, page * pageSize);
 

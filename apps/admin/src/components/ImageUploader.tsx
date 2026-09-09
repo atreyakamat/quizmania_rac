@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { UploadCloud, Image as ImageIcon, CheckCircle, AlertCircle } from 'lucide-react';
-import { uploadImage, StorageBucket } from '@quizmania/shared';
+import type { StorageBucket } from '@quizmania/shared';
 
 interface ImageUploaderProps {
   bucket: StorageBucket;
@@ -22,12 +22,20 @@ export function ImageUploader({ bucket, currentUrl, onUploaded, label = 'Upload 
     setIsUploading(true);
     setError(null);
 
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('bucket', bucket);
+
     try {
-      const res = await uploadImage(bucket, file, file.name);
-      if (res.success && res.url) {
-        onUploaded(res.url);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.url) {
+        onUploaded(data.url);
       } else {
-        setError(res.error || 'Failed to upload image');
+        setError(data.error || 'Failed to upload image');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
