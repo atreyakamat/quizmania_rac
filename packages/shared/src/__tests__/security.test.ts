@@ -602,9 +602,11 @@ async function runSecurityTests() {
   // Test 35: Production mode rejects test mock credentials
   // -------------------------------------------------------------
   const originalEnv = process.env.NODE_ENV;
+  const originalTestAuth = process.env.ENABLE_TEST_AUTH;
   try {
     // Temporarily simulate production environment
     (process.env as any).NODE_ENV = 'production';
+    (process.env as any).ENABLE_TEST_AUTH = 'true'; // Attempt bypass
     const prodSimReq = new Request('http://localhost:3011/api/quizzes', {
       headers: {
         cookie: `${ADMIN_ACCESS_COOKIE}=test-admin-token`
@@ -612,11 +614,12 @@ async function runSecurityTests() {
     });
     const prodSimRes = await requireAuthenticatedAdmin(prodSimReq);
     assertEqual(prodSimRes.authorized, false,
-      '35a. In production mode, test-admin-token is strictly rejected (no test backdoor)');
+      '35a. In production mode, test-admin-token is strictly rejected (no test backdoor, bypass impossible)');
     assert(prodSimRes.status === 401 || prodSimRes.status === 500,
       '35b. Production mode returns 401/500 instead of authenticating test mock');
   } finally {
     (process.env as any).NODE_ENV = originalEnv;
+    (process.env as any).ENABLE_TEST_AUTH = originalTestAuth;
   }
 
   console.log(`\nSecurity Test Results: ${passed} passed, ${failed} failed.\n`);

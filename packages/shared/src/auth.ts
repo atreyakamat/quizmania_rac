@@ -274,7 +274,8 @@ export async function requireAuthenticatedAdmin(request: Request): Promise<Requi
   }
 
   // 3. Automated Test Runner Handling (ONLY active in test runner, NEVER in production)
-  if (process.env.NODE_ENV === 'test') {
+  const isTestEnvironment = (process.env.NODE_ENV === 'test' || process.env.ENABLE_TEST_AUTH === 'true') && process.env.NODE_ENV !== 'production';
+  if (isTestEnvironment) {
     if (accessToken === 'test-admin-token') {
       const authCheck = await verifyAdminAuthorization('00000000-0000-4000-a000-000000000001', 'admin@quizmania.dev');
       if (!authCheck.authorized) {

@@ -60,8 +60,9 @@ export async function POST(request: Request) {
     );
   }
 
-  // 4. Test Runner Isolation (ONLY active in automated Vitest test runner, NEVER in production or dev server)
-  if (process.env.NODE_ENV === 'test') {
+  // 4. Test Runner Isolation (ONLY active in automated test runner, NEVER in production)
+  const isTestEnvironment = (process.env.NODE_ENV === 'test' || process.env.ENABLE_TEST_AUTH === 'true') && process.env.NODE_ENV !== 'production';
+  if (isTestEnvironment) {
     const adminRecord = await getAdminUserRecord(email);
     if (!adminRecord) {
       return NextResponse.json(

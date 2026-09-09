@@ -47,7 +47,8 @@ export async function POST(request: Request) {
   }
 
   // 3. Automated Test & Mock Handling (ONLY in test runner, NEVER in production)
-  if (process.env.NODE_ENV === 'test') {
+  const isTestEnvironment = (process.env.NODE_ENV === 'test' || process.env.ENABLE_TEST_AUTH === 'true') && process.env.NODE_ENV !== 'production';
+  if (isTestEnvironment) {
     if (refreshToken === 'valid-refresh-token') {
       const response = NextResponse.json({
         success: true,
