@@ -8,10 +8,37 @@ console.log('====================================================');
 console.log('QUIZMANIA SECRET SCANNER');
 console.log('====================================================\n');
 
+// Classification: SECURITY-SENSITIVE (Process Execution Environment)
+// Remediation for CWE-426 / CWE-427 (Untrusted Search Path):
+// Avoid executing git from an unvalidated caller PATH. Locate git strictly in trusted,
+// unwriteable system directories and provide a fixed, sanitized PATH environment.
+const TRUSTED_SYSTEM_DIRS = ['/usr/bin', '/bin', '/usr/local/bin'];
+
+function getTrustedGitPath() {
+  for (const dir of TRUSTED_SYSTEM_DIRS) {
+    const candidate = path.join(dir, 'git');
+    try {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+        return candidate;
+      }
+    } catch {}
+  }
+  return 'git';
+}
+
+const trustedGit = getTrustedGitPath();
+const sanitizedEnv = {
+  ...process.env,
+  PATH: TRUSTED_SYSTEM_DIRS.join(path.delimiter)
+};
+
 // 1. Get all git-tracked files
 let trackedFiles = [];
 try {
-  const output = execSync('git ls-files', { encoding: 'utf-8' });
+  const output = execSync(`"${trustedGit}" ls-files`, { 
+    encoding: 'utf-8',
+    env: sanitizedEnv
+  });
   trackedFiles = output.split('\n').map(f => f.trim()).filter(Boolean);
 } catch (err) {
   console.error('Error running git ls-files:', err.message);

@@ -268,7 +268,7 @@ async function runScheduleAvailabilityTests() {
   // 13. in-flight attempt completed after end_at succeeds if attempt timer has not expired
   {
     // In-flight attempt started legitimately before end_at
-    const uniqueSuffix = Date.now() + '-' + Math.random().toString(36).slice(2);
+    const uniqueSuffix = Date.now() + '-' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : 'rnd');
     const tokenInFlight = `session-inflight-${uniqueSuffix}`;
     const attemptIdInFlight = `attempt-inflight-${uniqueSuffix}`;
     // attempt expires in 10 minutes from now (timer still running)

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminJsonResponse, requireAuthenticatedAdmin, unauthorizedResponse } from '../../../lib/auth';
 import { checkRateLimit, getClientIp, getSupabaseAdminClient, isSupabaseConfigured } from '@quizmania/shared';
@@ -83,9 +84,10 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Generate Safe, Non-Colliding Filename (Path Traversal Protection)
-    const randomSuffix = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID().slice(0, 12)
-      : Math.random().toString(36).substring(2, 14);
+    // Classification: SECURITY-SENSITIVE
+    // Cryptographically secure random suffix ensures storage object keys cannot be predicted,
+    // enumerated, or collided by an attacker.
+    const randomSuffix = randomUUID().replace(/-/g, '').slice(0, 16);
     const safeBaseName = file.name
       .replace(/\.[^/.]+$/, '')
       .replace(/[^a-zA-Z0-9_-]/g, '_')

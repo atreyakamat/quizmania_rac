@@ -11,6 +11,7 @@ import type {
   QuizAvailability
 } from '@quizmania/types';
 import { getThemeCssVariables } from '@quizmania/shared';
+import { shuffleArray } from '@quizmania/quiz-schema';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -163,13 +164,18 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
   }, [step, secondsRemaining]);
 
   // Initialize & Randomize Questions when proceeding from participant form
+  // Classification: NON-SECURITY-SENSITIVE
+  // Purpose: Cosmetic UI presentation ordering of questions/options for participants.
+  // Preserves stable question and option IDs; authoritative server-side scoring is unaffected.
   const startQuizQuestions = async () => {
     let list = [...rawQuestions];
-    if (quiz.settings?.shuffle_questions) list = list.sort(() => Math.random() - 0.5);
+    if (quiz.settings?.shuffle_questions) {
+      list = shuffleArray(list);
+    }
     if (quiz.settings?.shuffle_options) {
       list = list.map(q => {
         if (q.options && q.options.length > 0 && q.question_type !== 'true_false') {
-          return { ...q, options: [...q.options].sort(() => Math.random() - 0.5) };
+          return { ...q, options: shuffleArray(q.options) };
         }
         return q;
       });

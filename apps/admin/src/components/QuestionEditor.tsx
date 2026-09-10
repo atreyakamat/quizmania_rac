@@ -16,6 +16,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import type { Question, Option, QuestionType, ScoringMethod } from '@quizmania/types';
+import { generateCanonicalUuid } from '@quizmania/quiz-schema';
 import { OptionEditor } from './OptionEditor';
 import { ImageUploader } from './ImageUploader';
 
@@ -126,12 +127,9 @@ export function QuestionEditor({
   };
 
   const handleAddOption = () => {
-    const optId = typeof crypto !== 'undefined' && crypto.randomUUID 
-      ? crypto.randomUUID() 
-      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-          const r = Math.random() * 16 | 0;
-          return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-        });
+    // Classification: SECURITY-SENSITIVE
+    // Cryptographically secure UUID for database entity primary key
+    const optId = generateCanonicalUuid();
     const newOpt: Option = {
       id: optId,
       question_id: question.id,

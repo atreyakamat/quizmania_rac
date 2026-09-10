@@ -9,7 +9,7 @@ import { ImageUploader } from './ImageUploader';
 import { QuizPreview } from './QuizPreview';
 import { JsonExporter } from './JsonExporter';
 import { QuizJsonImportArea } from './QuizJsonImportArea';
-import type { ImportSummary } from '@quizmania/quiz-schema';
+import { generateCanonicalUuid, type ImportSummary } from '@quizmania/quiz-schema';
 import { 
   Save, 
   Globe2, 
@@ -32,13 +32,9 @@ import {
 const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 function makeUuid(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = Math.random() * 16 | 0;
-    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-  });
+  // Classification: SECURITY-SENSITIVE
+  // Cryptographically secure UUID for database entity primary keys
+  return generateCanonicalUuid();
 }
 
 function toLocalDatetimeString(isoString?: string | null): string {

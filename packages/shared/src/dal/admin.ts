@@ -14,7 +14,7 @@ import type {
   PaginatedResponsesResult,
   Answer
 } from '@quizmania/types';
-import { convertQuizJsonToQuiz, getQuizAvailability, validateScheduleTimes } from '@quizmania/quiz-schema';
+import { convertQuizJsonToQuiz, getQuizAvailability, validateScheduleTimes, generateCanonicalUuid } from '@quizmania/quiz-schema';
 import { getSupabaseAdminClient, isSupabaseDatabaseReady } from '../supabase';
 import { mockStore, AdminUserRecord } from '../mock-data';
 import { ClubSummaryReport, generateClubSummary, exportClubSummaryCsv } from '../club-summary';
@@ -23,14 +23,9 @@ const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}
 
 function ensureUuid(id?: string | null): string {
   if (id && UUID_REGEX.test(id)) return id;
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
+  // Classification: SECURITY-SENSITIVE
+  // Cryptographically secure UUID ensures database primary keys cannot be predicted or collided
+  return generateCanonicalUuid();
 }
 
 export function normalizeQuizRecord(quiz: any): Quiz {

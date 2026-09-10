@@ -1,3 +1,4 @@
+import { randomUUID, randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getPublishedQuizBySlug, createQuizAttempt, checkRateLimit, getClientIp } from '@quizmania/shared';
 
@@ -75,8 +76,11 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
       }
     }
 
-    const sessionToken = `attempt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const attemptId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-4000-8000-' + Math.random().toString(16).slice(2, 14).padStart(12, '0');
+    // Classification: SECURITY-SENSITIVE
+    // Cryptographically secure session token prevents attempt spoofing, prediction, or hijacking
+    const sessionToken = `attempt_${randomBytes(24).toString('hex')}`;
+    // Cryptographically secure primary key identifier for the attempt
+    const attemptId = randomUUID();
     const startedAt = new Date().toISOString();
 
     let expiresAt: string | null = null;

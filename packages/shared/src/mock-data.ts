@@ -1,4 +1,5 @@
 import type { Theme, Quiz, Submission, Answer } from '@quizmania/types';
+import { generateCanonicalUuid } from '@quizmania/quiz-schema';
 import { QUIZMANIA_BRAND } from './brand/quizmania-theme';
 
 export const mockThemes: Theme[] = [
@@ -99,26 +100,71 @@ export const defaultMockAdminUsers: AdminUserRecord[] = typeof window === 'undef
   }
 ] : [];
 
-const STORE_FILE = '/tmp/quizmania-local-store.json';
-
-function getNodeFs(): any {
+function getNodeModule(name: string): any {
   if (typeof window !== 'undefined') return null;
   try {
     const req = typeof (globalThis as any).__non_webpack_require__ !== 'undefined'
       ? (globalThis as any).__non_webpack_require__
       : eval('require');
-    return req('fs');
+    return req(name);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolves a secure, isolated application-controlled path for mock store persistence.
+ * 
+ * Remediation for CWE-377 / CWE-379 / CWE-59:
+ * 1. User Isolation: Creates an isolated directory scoped to the current OS user ID (e.g. quizmania-store-<uid>).
+ * 2. Directory Permissions (0o700): Created with mode 0o700 so other system users cannot read, write, or enter.
+ * 3. File Permissions (0o600): Mock files are written with mode 0o600 (owner read/write only).
+ * 4. Symlink Defense: Validates via lstat that any existing file is a regular file and NOT a symbolic link.
+ * 5. Execution Boundary: This directory stores only JSON serialized test/mock data and never executes code.
+ */
+function getSecureStoreFilePath(): string | null {
+  if (typeof window !== 'undefined') return null;
+  const fs = getNodeModule('fs');
+  const os = getNodeModule('os');
+  const path = getNodeModule('path');
+  if (!fs || !os || !path) return null;
+
+  try {
+    const customDir = process.env.QUIZMANIA_STORE_DIR;
+    let baseDir: string;
+
+    if (customDir && typeof customDir === 'string') {
+      baseDir = path.resolve(customDir);
+    } else {
+      const uid = typeof process.getuid === 'function' ? process.getuid() : 'shared';
+      baseDir = path.join(os.tmpdir(), `quizmania-store-${uid}`);
+    }
+
+    if (!fs.existsSync(baseDir)) {
+      fs.mkdirSync(baseDir, { recursive: true, mode: 0o700 });
+    }
+
+    return path.join(baseDir, 'quizmania-local-store.json');
   } catch {
     return null;
   }
 }
 
 function readStoreFile(): { quizzes?: Quiz[]; themes?: Theme[]; submissions?: Submission[]; attempts?: MockAttempt[]; answers?: Answer[]; adminUsers?: AdminUserRecord[] } | null {
-  const fs = getNodeFs();
+  const fs = getNodeModule('fs');
   if (!fs) return null;
+  const filePath = getSecureStoreFilePath();
+  if (!filePath) return null;
+
   try {
-    if (fs.existsSync(STORE_FILE)) {
-      const content = fs.readFileSync(STORE_FILE, 'utf8');
+    if (fs.existsSync(filePath)) {
+      // Symlink defense (CWE-59): verify regular file, not a symlink
+      const stat = fs.lstatSync(filePath);
+      if (stat.isSymbolicLink() || !stat.isFile()) {
+        console.warn('Security: Refusing to read mock store from a symlink or non-regular file.');
+        return null;
+      }
+      const content = fs.readFileSync(filePath, 'utf8');
       return JSON.parse(content);
     }
   } catch {
@@ -128,10 +174,22 @@ function readStoreFile(): { quizzes?: Quiz[]; themes?: Theme[]; submissions?: Su
 }
 
 function writeStoreFile(data: { quizzes: Quiz[]; themes: Theme[]; submissions: Submission[]; attempts: MockAttempt[]; answers?: Answer[]; adminUsers?: AdminUserRecord[] }) {
-  const fs = getNodeFs();
+  const fs = getNodeModule('fs');
   if (!fs) return;
+  const filePath = getSecureStoreFilePath();
+  if (!filePath) return;
+
   try {
-    fs.writeFileSync(STORE_FILE, JSON.stringify(data, null, 2), 'utf8');
+    // Symlink defense: verify existing target is not a symlink
+    if (fs.existsSync(filePath)) {
+      const stat = fs.lstatSync(filePath);
+      if (stat.isSymbolicLink()) {
+        console.warn('Security: Refusing to overwrite symlink in mock store.');
+        return;
+      }
+    }
+    // Write with restrictive 0o600 permissions
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), { encoding: 'utf8', mode: 0o600 });
   } catch {
     // ignore
   }
@@ -233,9 +291,9 @@ class MockStore {
 
   saveQuiz(quiz: Quiz): Quiz {
     this.syncFromDisk();
-    const quizId = quiz.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `quiz-${Date.now()}`);
+    const quizId = quiz.id || generateCanonicalUuid();
     const processedQuestions = quiz.questions?.map((q, qIdx) => {
-      const qId = q.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `q-${quizId}-${qIdx + 1}`);
+      const qId = q.id || generateCanonicalUuid();
       return {
         ...q,
         id: qId,
@@ -243,7 +301,7 @@ class MockStore {
         question_order: q.question_order ?? (qIdx + 1),
         options: (q.options || []).map((opt, optIdx) => ({
           ...opt,
-          id: opt.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `opt-${qId}-${optIdx + 1}`),
+          id: opt.id || generateCanonicalUuid(),
           question_id: qId,
           option_order: opt.option_order ?? (optIdx + 1)
         }))
@@ -252,7 +310,7 @@ class MockStore {
 
     const processedSections = quiz.sections?.map((s, sIdx) => ({
       ...s,
-      id: s.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sec-${quizId}-${sIdx + 1}`),
+      id: s.id || generateCanonicalUuid(),
       quiz_id: quizId,
       section_order: s.section_order ?? (sIdx + 1)
     }));

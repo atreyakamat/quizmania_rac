@@ -16,7 +16,7 @@ import {
   getResponsesPaginated,
   mockStore
 } from '../index';
-import { validateQuizJson, questionSchema, quizSettingsSchema } from '@quizmania/quiz-schema';
+import { validateQuizJson, questionSchema, quizSettingsSchema, generateCanonicalUuid, generateSecureToken, shuffleArray } from '@quizmania/quiz-schema';
 import type { Quiz, Question, PublicQuiz } from '@quizmania/types';
 
 async function runSecurityTests() {
@@ -890,6 +890,120 @@ async function runSecurityTests() {
   assertEqual(authExportRes.status, 200, '39g. Authenticated GET /api/responses/summary/export succeeds with 200 OK');
   const summaryCsvText = await authExportRes.text();
   assert(summaryCsvText.includes('Club Name,Response Count,Percentage'), '39g2. Summary Export contains expected CSV header');
+
+  // -------------------------------------------------------------
+  // Test 40: Security Hotspot Remediations Verification
+  // -------------------------------------------------------------
+  // 40a: Cryptographically secure RFC-4122 v4 UUID format
+  const sampleUuid = generateCanonicalUuid();
+  const uuidV4Regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  assert(uuidV4Regex.test(sampleUuid), '40a. generateCanonicalUuid produces valid RFC-4122 v4 UUID');
+
+  // 40b: High-entropy uniqueness (0 collisions in 1000 UUIDs)
+  const uuidSet = new Set<string>();
+  for (let i = 0; i < 1000; i++) {
+    uuidSet.add(generateCanonicalUuid());
+  }
+  assertEqual(uuidSet.size, 1000, '40b. 1000 generated canonical UUIDs have 0 collisions');
+
+  // 40c: Secure cryptographic token format and uniqueness
+  const sampleToken = generateSecureToken('attempt', 24);
+  assert(sampleToken.startsWith('attempt_'), '40c. generateSecureToken includes requested prefix');
+  assertEqual(sampleToken.length, 'attempt_'.length + 48, '40c2. generateSecureToken produces 48 hex chars for 24 bytes');
+  const tokenSet = new Set<string>();
+  for (let i = 0; i < 1000; i++) {
+    tokenSet.add(generateSecureToken('sec', 16));
+  }
+  assertEqual(tokenSet.size, 1000, '40c3. 1000 generated secure tokens have 0 collisions');
+
+  // 40d: Non-security-sensitive array shuffle (Fisher-Yates) correctness
+  const originalList = [
+    { id: 'opt-1', text: 'Alpha' },
+    { id: 'opt-2', text: 'Bravo' },
+    { id: 'opt-3', text: 'Charlie' },
+    { id: 'opt-4', text: 'Delta' }
+  ];
+  const shuffledList = shuffleArray(originalList);
+  assertEqual(shuffledList.length, originalList.length, '40d. shuffleArray preserves array length');
+  assertEqual(originalList[0].id, 'opt-1', '40d2. shuffleArray does not mutate source array');
+  const originalIds = new Set(originalList.map(item => item.id));
+  const shuffledIds = new Set(shuffledList.map(item => item.id));
+  assertEqual(shuffledIds.size, originalIds.size, '40d3. shuffleArray preserves all unique item IDs');
+  for (const item of shuffledList) {
+    assert(originalIds.has(item.id), `40d4. Shuffled item ${item.id} exists in original items`);
+  }
+
+  // 40e: Upload route uses cryptographically secure tokens and rejects unauthenticated uploads
+  {
+    const { POST: uploadSecHandler } = await import('../../../../apps/admin/src/app/api/upload/route');
+    const formData = new FormData();
+    const fakeFile = new File(['fake content'], '../../malicious#name.png', { type: 'image/png' });
+    formData.append('file', fakeFile);
+    formData.append('bucket', 'quiz-covers');
+    const unauthReq = new Request('http://localhost:3011/api/upload', {
+      method: 'POST',
+      headers: {
+        origin: 'http://localhost:3011',
+        host: 'localhost:3011'
+      },
+      body: formData
+    }) as any;
+    const unauthRes = await uploadSecHandler(unauthReq);
+    assertEqual(unauthRes.status, 401, '40e. Unauthenticated upload rejected with 401');
+  }
+
+  // 40f: Mock store filesystem safety (directory isolation and file permissions)
+  const storeUid = typeof process.getuid === 'function' ? process.getuid() : 'shared';
+  const expectedStoreDir = path.join(require('os').tmpdir(), `quizmania-store-${storeUid}`);
+  assert(fs.existsSync(expectedStoreDir), '40f. Mock store created isolated user directory');
+  const dirStat = fs.statSync(expectedStoreDir);
+  const dirMode = dirStat.mode & 0o777;
+  assertEqual(dirMode, 0o700, '40f2. Mock store directory has restrictive 0o700 permissions');
+
+  const storeFile = path.join(expectedStoreDir, 'quizmania-local-store.json');
+  if (fs.existsSync(storeFile)) {
+    const fileStat = fs.statSync(storeFile);
+    const fileMode = fileStat.mode & 0o777;
+    assertEqual(fileMode, 0o600, '40f3. Mock store file has restrictive 0o600 permissions');
+    assert(!fs.lstatSync(storeFile).isSymbolicLink(), '40f4. Mock store file is not a symlink');
+  }
+
+  // 40g: Start attempt route generates secure attemptId and sessionToken
+  const testQuizSlug = 'crypto-test-quiz-40';
+  await saveQuiz({
+    id: generateCanonicalUuid(),
+    title: 'Crypto Test Quiz',
+    slug: testQuizSlug,
+    status: 'published',
+    questions: [
+      {
+        id: generateCanonicalUuid(),
+        question_text: 'What is 2 + 2?',
+        question_type: 'single_choice',
+        marks: 2,
+        options: [
+          { id: generateCanonicalUuid(), option_text: '4', is_correct: true }
+        ]
+      }
+    ]
+  });
+
+  const { POST: startRouteHandler } = await import('../../../../apps/public/src/app/api/quizzes/[slug]/start/route');
+  const startReq = new Request(`http://localhost:3010/api/quizzes/${testQuizSlug}/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      participant_name: 'Security Tester',
+      participant_email: 'tester@mapusa.rotaract.org'
+    })
+  }) as any;
+  const startRes = await startRouteHandler(startReq, { params: { slug: testQuizSlug } });
+  assertEqual(startRes.status, 200, '40g. POST /api/quizzes/[slug]/start returns 200 OK');
+  const startJson = await startRes.json();
+  assertEqual(startJson.success, true, '40g2. Start response has success: true');
+  assert(uuidV4Regex.test(startJson.attemptId), '40g3. attemptId is a valid cryptographic UUID v4');
+  assert(startJson.sessionToken.startsWith('attempt_'), '40g4. sessionToken uses cryptographic prefix format');
+  assert(startJson.sessionToken.length >= 40, '40g5. sessionToken has high cryptographic entropy');
 
   console.log(`\nSecurity Test Results: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {

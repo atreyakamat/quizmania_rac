@@ -11,6 +11,7 @@ import type {
 } from '@quizmania/types';
 import { getSupabaseAdminClient, getSupabasePublicClient, isSupabaseAdminConfigured, isSupabaseDatabaseReady } from './supabase';
 import { mockStore } from './mock-data';
+import { generateCanonicalUuid } from '@quizmania/quiz-schema';
 
 interface ScoreContext {
   question: Question;
@@ -340,9 +341,9 @@ export async function scoreAndRecordQuizSubmission(
   const passingPercentage = quiz.settings?.passing_score_percentage ?? 50;
   const passed = percentage >= passingPercentage;
 
-  const submissionId = typeof crypto !== 'undefined' && crypto.randomUUID 
-    ? crypto.randomUUID() 
-    : '00000000-0000-4000-8000-' + Math.random().toString(16).slice(2, 14).padStart(12, '0');
+  // Classification: SECURITY-SENSITIVE
+  // Cryptographically secure submission identifier prevents enumeration and collision attacks
+  const submissionId = generateCanonicalUuid();
   const submittedAt = new Date().toISOString();
 
   const participantData = {
@@ -409,7 +410,9 @@ export async function scoreAndRecordQuizSubmission(
     const answerRows: Answer[] = breakdown.map(b => {
       const ans = answerMap.get(b.questionId);
       return {
-        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ans-${Date.now()}-${Math.random()}`,
+        // Classification: SECURITY-SENSITIVE
+        // Cryptographically secure database row identifier
+        id: generateCanonicalUuid(),
         submission_id: submissionId,
         question_id: b.questionId,
         selected_option_id: ans?.selectedOptionId || null,

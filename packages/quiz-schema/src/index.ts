@@ -692,15 +692,99 @@ export interface ImportSummary {
 
 const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
+/**
+ * Generates a cryptographically secure RFC-4122 Version 4 UUID.
+ * Classification: SECURITY-SENSITIVE
+ * Never uses Math.random() or predictable PRNGs.
+ */
 export function generateCanonicalUuid(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
+  if (typeof globalThis !== 'undefined' && globalThis.crypto) {
+    if (typeof globalThis.crypto.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID();
+    }
+    if (typeof globalThis.crypto.getRandomValues === 'function') {
+      const bytes = new Uint8Array(16);
+      globalThis.crypto.getRandomValues(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40; // RFC 4122 v4
+      bytes[8] = (bytes[8] & 0x3f) | 0x80; // Variant 10xx
+      const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
   }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
+
+  // Node.js fallback if globalThis.crypto is unavailable in legacy runtimes
+  try {
+    const nodeCrypto = typeof (globalThis as any).__non_webpack_require__ !== 'undefined'
+      ? (globalThis as any).__non_webpack_require__('crypto')
+      : eval('require')('crypto');
+    if (typeof nodeCrypto.randomUUID === 'function') {
+      return nodeCrypto.randomUUID();
+    }
+  } catch {}
+
+  throw new Error('Cryptographically secure randomness is required for UUID generation.');
+}
+
+/**
+ * Generates a cryptographically secure random token (hex-encoded).
+ * Classification: SECURITY-SENSITIVE
+ * Used for session tokens, attempt verification tokens, and non-colliding storage keys.
+ */
+export function generateSecureToken(prefix = 'tok', byteLength = 24): string {
+  if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(byteLength);
+    globalThis.crypto.getRandomValues(bytes);
+    const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    return `${prefix}_${hex}`;
+  }
+
+  try {
+    const nodeCrypto = typeof (globalThis as any).__non_webpack_require__ !== 'undefined'
+      ? (globalThis as any).__non_webpack_require__('crypto')
+      : eval('require')('crypto');
+    if (typeof nodeCrypto.randomBytes === 'function') {
+      return `${prefix}_${nodeCrypto.randomBytes(byteLength).toString('hex')}`;
+    }
+  } catch {}
+
+  throw new Error('Cryptographically secure randomness is required for token generation.');
+}
+
+/**
+ * Non-security-sensitive array shuffle implementing the Fisher-Yates algorithm.
+ * 
+ * Classification: NON-SECURITY-SENSITIVE
+ * Purpose: Cosmetic presentation ordering of quiz questions and options in the user interface.
+ * 
+ * Security Properties:
+ * - Does NOT alter question identifiers, option identifiers, or correct answer associations.
+ * - Does NOT affect server-authoritative scoring, timer constraints, or attempt validation.
+ * - Uniformly shuffles items without modifying the source array.
+ */
+export function shuffleArray<T>(items: readonly T[]): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    // Uniform index selection using standard crypto primitives
+    let j = 0;
+    if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+      const buffer = new Uint32Array(1);
+      globalThis.crypto.getRandomValues(buffer);
+      j = buffer[0] % (i + 1);
+    } else {
+      try {
+        const nodeCrypto = typeof (globalThis as any).__non_webpack_require__ !== 'undefined'
+          ? (globalThis as any).__non_webpack_require__('crypto')
+          : eval('require')('crypto');
+        j = nodeCrypto.randomInt(0, i + 1);
+      } catch {
+        j = 0;
+      }
+    }
+    const temp = result[i];
+    result[i] = result[j];
+    result[j] = temp;
+  }
+  return result;
 }
 
 export function isCanonicalUuid(id?: string | null): boolean {
