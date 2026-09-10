@@ -37,14 +37,16 @@ import {
 } from 'lucide-react';
 import type { ClubSummaryReport } from '@quizmania/shared';
 
+export type ResponseFilterStatus = 'all' | 'passed' | 'failed';
+
 interface ResponsesManagerProps {
-  initialData: PaginatedResponsesResult;
-  quizzes: Quiz[];
+  readonly initialData: PaginatedResponsesResult;
+  readonly quizzes: readonly Quiz[];
 }
 
 // --- SUB-COMPONENTS FOR COGNITIVE SIMPLICITY ---
 
-export function ResponsesSummaryCards({ summary }: { summary: PaginatedResponsesResult['summary'] }) {
+export function ResponsesSummaryCards({ summary }: Readonly<{ summary: PaginatedResponsesResult['summary'] }>) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
@@ -111,16 +113,16 @@ export function ResponsesSummaryCards({ summary }: { summary: PaginatedResponses
 }
 
 interface ResponsesFilterBarProps {
-  search: string;
-  onSearchChange: (val: string) => void;
-  quizId: string;
-  onQuizIdChange: (val: string) => void;
-  quizzes: Quiz[];
-  status: 'all' | 'passed' | 'failed';
-  onStatusChange: (val: 'all' | 'passed' | 'failed') => void;
-  onExportCsv: () => void;
-  onOpenSummaryReport: () => void;
-  onResetFilters: () => void;
+  readonly search: string;
+  readonly onSearchChange: (val: string) => void;
+  readonly quizId: string;
+  readonly onQuizIdChange: (val: string) => void;
+  readonly quizzes: readonly Quiz[];
+  readonly status: ResponseFilterStatus;
+  readonly onStatusChange: (val: ResponseFilterStatus) => void;
+  readonly onExportCsv: () => void;
+  readonly onOpenSummaryReport: () => void;
+  readonly onResetFilters: () => void;
 }
 
 function ResponsesFilterBar({
@@ -134,7 +136,7 @@ function ResponsesFilterBar({
   onExportCsv,
   onOpenSummaryReport,
   onResetFilters
-}: ResponsesFilterBarProps) {
+}: Readonly<ResponsesFilterBarProps>) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -210,13 +212,15 @@ function ResponsesFilterBar({
   );
 }
 
+interface SubmissionTableRowProps {
+  readonly item: PaginatedResponsesResult['items'][0];
+  readonly onOpenDetail: (id: string) => void;
+}
+
 function SubmissionTableRow({
   item,
   onOpenDetail
-}: {
-  item: PaginatedResponsesResult['items'][0];
-  onOpenDetail: (id: string) => void;
-}) {
+}: Readonly<SubmissionTableRowProps>) {
   const clubName = item.participant_data?.club_name as string | undefined;
   const district = item.participant_data?.district_number as string | undefined;
 
@@ -322,6 +326,15 @@ function SubmissionTableRow({
   );
 }
 
+interface ResponsesPaginationProps {
+  readonly page: number;
+  readonly pageSize: number;
+  readonly total: number;
+  readonly totalPages: number;
+  readonly onPageChange: (fn: (p: number) => number) => void;
+  readonly onPageSizeChange: (size: number) => void;
+}
+
 function ResponsesPagination({
   page,
   pageSize,
@@ -329,14 +342,7 @@ function ResponsesPagination({
   totalPages,
   onPageChange,
   onPageSizeChange
-}: {
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-  onPageChange: (fn: (p: number) => number) => void;
-  onPageSizeChange: (size: number) => void;
-}) {
+}: Readonly<ResponsesPaginationProps>) {
   return (
     <div className="px-6 py-3.5 bg-slate-50/50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
       <div className="flex items-center gap-2">
@@ -389,18 +395,18 @@ function ResponsesPagination({
 }
 
 interface ResponsesTableProps {
-  data: PaginatedResponsesResult;
-  loading: boolean;
-  search: string;
-  quizId: string;
-  status: string;
-  sortBy: string;
-  sortOrder: string;
-  onSortChange: (sortBy: any, sortOrder: any) => void;
-  onResetFilters: () => void;
-  onOpenDetail: (id: string) => void;
-  onPageChange: (fn: (p: number) => number) => void;
-  onPageSizeChange: (size: number) => void;
+  readonly data: PaginatedResponsesResult;
+  readonly loading: boolean;
+  readonly search: string;
+  readonly quizId: string;
+  readonly status: string;
+  readonly sortBy: string;
+  readonly sortOrder: string;
+  readonly onSortChange: (sortBy: any, sortOrder: any) => void;
+  readonly onResetFilters: () => void;
+  readonly onOpenDetail: (id: string) => void;
+  readonly onPageChange: (fn: (p: number) => number) => void;
+  readonly onPageSizeChange: (size: number) => void;
 }
 
 function ResponsesTable({
@@ -416,7 +422,7 @@ function ResponsesTable({
   onOpenDetail,
   onPageChange,
   onPageSizeChange
-}: ResponsesTableProps) {
+}: Readonly<ResponsesTableProps>) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
@@ -510,6 +516,15 @@ function ResponsesTable({
   );
 }
 
+interface QuestionBreakdownItemProps {
+  readonly question: QuestionResponseDetail;
+  readonly index: number;
+  readonly currentEarned: number;
+  readonly isSaving: boolean;
+  readonly onGradeChange: (val: number) => void;
+  readonly onSaveGrade: () => void;
+}
+
 function QuestionBreakdownItem({
   question: q,
   index: idx,
@@ -517,14 +532,7 @@ function QuestionBreakdownItem({
   isSaving,
   onGradeChange,
   onSaveGrade
-}: {
-  question: QuestionResponseDetail;
-  index: number;
-  currentEarned: number;
-  isSaving: boolean;
-  onGradeChange: (val: number) => void;
-  onSaveGrade: () => void;
-}) {
+}: Readonly<QuestionBreakdownItemProps>) {
   const isSubjective = q.questionType === 'paragraph';
 
   return (
@@ -634,7 +642,7 @@ function QuestionBreakdownItem({
               value={currentEarned}
               onChange={e => {
                 const val = parseFloat(e.target.value);
-                onGradeChange(isNaN(val) ? 0 : val);
+                onGradeChange(Number.isNaN(val) ? 0 : val);
               }}
               className="w-20 px-2.5 py-1 text-xs font-bold text-slate-800 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#A50D52] bg-white text-center"
             />
@@ -661,6 +669,18 @@ function QuestionBreakdownItem({
   );
 }
 
+interface ResponseDetailModalProps {
+  readonly activeDetail: ResponseDetail | null;
+  readonly detailLoading: boolean;
+  readonly gradeInputs: Record<string, number>;
+  readonly savingGradeFor: string | null;
+  readonly gradeStatusMsg: { readonly type: 'success' | 'error'; readonly text: string } | null;
+  readonly onClose: () => void;
+  readonly onGradeChange: (questionId: string, val: number) => void;
+  readonly onSaveGrade: (questionId: string) => void;
+  readonly onDismissGradeStatus: () => void;
+}
+
 function ResponseDetailModal({
   activeDetail,
   detailLoading,
@@ -671,17 +691,7 @@ function ResponseDetailModal({
   onGradeChange,
   onSaveGrade,
   onDismissGradeStatus
-}: {
-  activeDetail: ResponseDetail | null;
-  detailLoading: boolean;
-  gradeInputs: Record<string, number>;
-  savingGradeFor: string | null;
-  gradeStatusMsg: { type: 'success' | 'error'; text: string } | null;
-  onClose: () => void;
-  onGradeChange: (questionId: string, val: number) => void;
-  onSaveGrade: (questionId: string) => void;
-  onDismissGradeStatus: () => void;
-}) {
+}: Readonly<ResponseDetailModalProps>) {
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -825,13 +835,15 @@ function ResponseDetailModal({
   );
 }
 
+interface ClubSummaryFrequencyTableProps {
+  readonly report: ClubSummaryReport;
+  readonly search: string;
+}
+
 function ClubSummaryFrequencyTable({
   report,
   search
-}: {
-  report: ClubSummaryReport;
-  search: string;
-}) {
+}: Readonly<ClubSummaryFrequencyTableProps>) {
   const filteredItems = report.items.filter(item =>
     item.clubName.toLowerCase().includes(search.toLowerCase().trim())
   );
@@ -909,6 +921,124 @@ function ClubSummaryFrequencyTable({
   );
 }
 
+interface ClubSummaryModalBodyProps {
+  readonly loading: boolean;
+  readonly report: ClubSummaryReport | null;
+  readonly search: string;
+  readonly onSearchChange: (val: string) => void;
+}
+
+function ClubSummaryModalBody({
+  loading,
+  report,
+  search,
+  onSearchChange
+}: Readonly<ClubSummaryModalBodyProps>) {
+  if (loading) {
+    return (
+      <div className="p-16 flex flex-col items-center justify-center text-center">
+        <div className="w-10 h-10 border-4 border-[#F3D6E1] border-t-[#A50D52] rounded-full animate-spin mb-4" />
+        <span className="text-sm font-bold text-slate-700">Generating Club Summary...</span>
+        <span className="text-xs text-slate-400 mt-1">Normalizing club names and aggregating frequencies</span>
+      </div>
+    );
+  }
+
+  if (!report) {
+    return (
+      <div className="p-8 text-center text-slate-500">
+        No summary data available.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Summary Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+              Total Responses
+            </span>
+            <span className="text-xl font-black text-slate-800">
+              {report.totalResponses}
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+            <Building className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+              Unique Clubs
+            </span>
+            <span className="text-xl font-black text-slate-800">
+              {report.uniqueClubs}
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+            <Award className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+              Top Participating Club
+            </span>
+            <span className="text-sm font-extrabold text-slate-800 truncate block max-w-[180px]">
+              {report.items[0]?.clubName || '—'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter / Search within Summary */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+        <div className="relative w-full sm:w-72">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search club in summary..."
+            value={search}
+            onChange={e => onSearchChange(e.target.value)}
+            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#A50D52] bg-slate-50/50"
+          />
+        </div>
+        <span className="text-xs text-slate-400">
+          Sorted by highest frequency • Alphabetical secondary sort
+        </span>
+      </div>
+
+      {/* Summary Frequency Table */}
+      <ClubSummaryFrequencyTable report={report} search={search} />
+
+      <p className="text-[11px] text-slate-400 leading-relaxed">
+        ℹ️ Club names are grouped case-insensitively and internal whitespace is normalized so subtle typing differences do not create duplicate clubs. Responses with missing or blank club fields are grouped under &ldquo;Unknown / Not Provided&rdquo;.
+      </p>
+    </>
+  );
+}
+
+interface ClubSummaryModalProps {
+  readonly isOpen: boolean;
+  readonly loading: boolean;
+  readonly report: ClubSummaryReport | null;
+  readonly search: string;
+  readonly onSearchChange: (val: string) => void;
+  readonly copied: boolean;
+  readonly onClose: () => void;
+  readonly onExportCsv: () => void;
+  readonly onCopy: () => void;
+  readonly onPrint: () => void;
+}
+
 function ClubSummaryModal({
   isOpen,
   loading,
@@ -920,18 +1050,7 @@ function ClubSummaryModal({
   onExportCsv,
   onCopy,
   onPrint
-}: {
-  isOpen: boolean;
-  loading: boolean;
-  report: ClubSummaryReport | null;
-  search: string;
-  onSearchChange: (val: string) => void;
-  copied: boolean;
-  onClose: () => void;
-  onExportCsv: () => void;
-  onCopy: () => void;
-  onPrint: () => void;
-}) {
+}: Readonly<ClubSummaryModalProps>) {
   if (!isOpen) return null;
 
   return (
@@ -1010,93 +1129,12 @@ function ClubSummaryModal({
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
-          {loading ? (
-            <div className="p-16 flex flex-col items-center justify-center text-center">
-              <div className="w-10 h-10 border-4 border-[#F3D6E1] border-t-[#A50D52] rounded-full animate-spin mb-4" />
-              <span className="text-sm font-bold text-slate-700">Generating Club Summary...</span>
-              <span className="text-xs text-slate-400 mt-1">Normalizing club names and aggregating frequencies</span>
-            </div>
-          ) : report ? (
-            <>
-              {/* Summary Metric Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-                      Total Responses
-                    </span>
-                    <span className="text-xl font-black text-slate-800">
-                      {report.totalResponses}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                    <Building className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-                      Unique Clubs
-                    </span>
-                    <span className="text-xl font-black text-slate-800">
-                      {report.uniqueClubs}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#F3D6E1] text-[#A50D52] flex items-center justify-center font-bold">
-                    <Award className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-                      Top Participating Club
-                    </span>
-                    <span className="text-sm font-extrabold text-slate-800 block truncate" title={report.items[0]?.clubName}>
-                      {report.items[0]?.clubName || 'None'}
-                    </span>
-                    {report.items[0] && (
-                      <span className="text-[11px] text-[#A50D52] font-semibold">
-                        {report.items[0].count} responses ({report.items[0].percentage.toFixed(1)}%)
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Filter / Search within Summary */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                <div className="relative w-full sm:w-72">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search club in summary..."
-                    value={search}
-                    onChange={e => onSearchChange(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#A50D52] bg-slate-50/50"
-                  />
-                </div>
-                <span className="text-xs text-slate-400">
-                  Sorted by highest frequency • Alphabetical secondary sort
-                </span>
-              </div>
-
-              {/* Summary Frequency Table */}
-              <ClubSummaryFrequencyTable report={report} search={search} />
-
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                ℹ️ Club names are grouped case-insensitively and internal whitespace is normalized so subtle typing differences do not create duplicate clubs. Responses with missing or blank club fields are grouped under &ldquo;Unknown / Not Provided&rdquo;.
-              </p>
-            </>
-          ) : (
-            <div className="p-8 text-center text-slate-500">
-              No summary data available.
-            </div>
-          )}
+          <ClubSummaryModalBody
+            loading={loading}
+            report={report}
+            search={search}
+            onSearchChange={onSearchChange}
+          />
         </div>
 
         {/* Modal Footer */}
@@ -1128,7 +1166,7 @@ function ClubSummaryModal({
 
 // --- MAIN RESPONSES MANAGER COMPONENT ---
 
-export function ResponsesManager({ initialData, quizzes }: ResponsesManagerProps) {
+export function ResponsesManager({ initialData, quizzes }: Readonly<ResponsesManagerProps>) {
   const [data, setData] = useState<PaginatedResponsesResult>(initialData);
   const [loading, setLoading] = useState(false);
 
@@ -1136,7 +1174,7 @@ export function ResponsesManager({ initialData, quizzes }: ResponsesManagerProps
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [quizId, setQuizId] = useState('');
-  const [status, setStatus] = useState<'all' | 'passed' | 'failed'>('all');
+  const [status, setStatus] = useState<ResponseFilterStatus>('all');
   const [minScore, setMinScore] = useState('');
   const [maxScore, setMaxScore] = useState('');
   const [startDate, setStartDate] = useState('');

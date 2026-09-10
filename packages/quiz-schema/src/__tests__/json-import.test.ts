@@ -1,4 +1,16 @@
-import { validateQuizJson, convertQuizJsonToQuiz, EXAMPLE_IMPORT_JSON } from '../index';
+import { test } from 'node:test';
+import {
+  validateQuizJson,
+  convertQuizJsonToQuiz,
+  EXAMPLE_IMPORT_JSON,
+  validateScheduleTimes,
+  getQuizAvailability,
+  generateSlug,
+  generateCanonicalUuid,
+  generateSecureToken,
+  shuffleArray,
+  isCanonicalUuid
+} from '../index';
 import type { QuizJsonImportFormat } from '@quizmania/types';
 
 export async function runJsonImportTests() {
@@ -532,6 +544,131 @@ export async function runJsonImportTests() {
   const resExample = convertQuizJsonToQuiz(EXAMPLE_IMPORT_JSON);
   assert(resExample.success === true, 'Bonus: EXAMPLE_IMPORT_JSON parses and converts cleanly');
   assertEqual(resExample.summary?.questionsCount, 3, 'Bonus: EXAMPLE_IMPORT_JSON has 3 questions');
+
+  // ------------------------------------------------------------------------
+  // Test 15: Schedule Window Validation
+  // ------------------------------------------------------------------------
+  console.log('\nScenario 15: Schedule window validation');
+  assert(validateScheduleTimes().valid, 'Test 15a: no dates is valid');
+  assert(validateScheduleTimes(null, null).valid, 'Test 15b: null dates is valid');
+  assert(validateScheduleTimes('2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z').valid, 'Test 15c: start before end is valid');
+  assert(!validateScheduleTimes('invalid-date', '2026-01-02T00:00:00Z').valid, 'Test 15d: invalid start rejected');
+  assert(!validateScheduleTimes('2026-01-02T00:00:00Z', '2026-01-01T00:00:00Z').valid, 'Test 15e: end before start rejected');
+
+  // ------------------------------------------------------------------------
+  // Test 16: Quiz Availability Determination
+  // ------------------------------------------------------------------------
+  console.log('Scenario 16: Quiz availability determination');
+  const now = new Date('2026-06-15T12:00:00Z');
+  const availUnpublished = getQuizAvailability({ status: 'closed' }, now);
+  assert(!availUnpublished.isAvailable && availUnpublished.status === 'unpublished', 'Test 16a: closed is unpublished');
+
+  const availDraft = getQuizAvailability({ status: 'draft' }, now);
+  assert(!availDraft.isAvailable && availDraft.status === 'draft', 'Test 16b: draft is draft');
+
+  const availNoSchedule = getQuizAvailability({ status: 'published', settings: { schedule_enabled: false } }, now);
+  assert(availNoSchedule.isAvailable && availNoSchedule.status === 'live', 'Test 16c: published without schedule is live');
+
+  const availUpcoming = getQuizAvailability({
+    status: 'published',
+    start_at: '2026-06-20T00:00:00Z',
+    settings: { schedule_enabled: true }
+  }, now);
+  assert(!availUpcoming.isAvailable && availUpcoming.status === 'upcoming', 'Test 16d: future start is upcoming');
+
+  const availExpired = getQuizAvailability({
+    status: 'published',
+    end_at: '2026-06-10T00:00:00Z',
+    settings: { schedule_enabled: true }
+  }, now);
+  assert(!availExpired.isAvailable && availExpired.status === 'expired', 'Test 16e: past end is expired');
+
+  const availLiveActive = getQuizAvailability({
+    status: 'published',
+    start_at: '2026-06-10T00:00:00Z',
+    end_at: '2026-06-20T00:00:00Z',
+    settings: { schedule_enabled: true }
+  }, now);
+  assert(availLiveActive.isAvailable && availLiveActive.status === 'live', 'Test 16f: within window is live');
+
+  // ------------------------------------------------------------------------
+  // Test 17: Canonical Slug Generation
+  // ------------------------------------------------------------------------
+  console.log('Scenario 17: Slug generation');
+  assertEqual(generateSlug('Hello World! 2026'), 'hello-world-2026', 'Test 17a: normal slug');
+  assertEqual(generateSlug('   ---Quiz @#$ Mania---  '), 'quiz-mania', 'Test 17b: cleans symbols and dashes');
+
+  // ------------------------------------------------------------------------
+  // Test 18: Canonical UUID & Secure Token Generation
+  // ------------------------------------------------------------------------
+  console.log('Scenario 18: UUID and Secure Tokens');
+  const generatedUuid = generateCanonicalUuid();
+  assert(isCanonicalUuid(generatedUuid), 'Test 18a: generateCanonicalUuid creates valid UUID');
+  assert(!isCanonicalUuid('invalid-uuid-format'), 'Test 18b: rejects invalid UUID');
+  assert(!isCanonicalUuid(null), 'Test 18c: rejects null');
+
+  const tokenDefault = generateSecureToken();
+  assert(tokenDefault.startsWith('tok_'), 'Test 18d: default token starts with tok_');
+  const tokenCustom = generateSecureToken('session', 16);
+  assert(tokenCustom.startsWith('session_'), 'Test 18e: custom prefix applied');
+
+  // ------------------------------------------------------------------------
+  // Test 19: Array Shuffle
+  // ------------------------------------------------------------------------
+  console.log('Scenario 19: Array Shuffle');
+  assertEqual(shuffleArray([]).length, 0, 'Test 19a: shuffle empty array');
+  const items = [1, 2, 3, 4, 5];
+  const shuffled = shuffleArray(items);
+  assertEqual(shuffled.length, 5, 'Test 19b: shuffle preserves length');
+  assert(items.every(item => shuffled.includes(item)), 'Test 19c: shuffle preserves all elements');
+
+  // ------------------------------------------------------------------------
+  // Test 20: Short Text & True/False Questions in convertQuizJsonToQuiz
+  // ------------------------------------------------------------------------
+  console.log('Scenario 20: Question type conversion variations');
+  const jsonVariants = JSON.stringify({
+    id: '55555555-5555-4555-a555-555555555555',
+    title: 'Variants Quiz',
+    settings: { timer: false, allowReview: false },
+    questions: [
+      {
+        question: 'Is the sky blue?',
+        type: 'true_false',
+        options: [
+          { text: 'Yes', correct: true },
+          { text: 'No', correct: false }
+        ]
+      },
+      {
+        question: 'Name a primary color',
+        type: 'short_text',
+        accepted_answers: ['red', 'blue', 'yellow']
+      },
+      {
+        question: 'Select multiple evens',
+        type: 'multiple_choice',
+        options: [
+          { text: '2', correct: true },
+          { text: '4', correct: true }
+        ]
+      }
+    ]
+  });
+
+  const resVariants = convertQuizJsonToQuiz(jsonVariants, '66666666-6666-4666-a666-666666666666');
+  assert(resVariants.success, 'Test 20a: convert variants succeeds');
+  assertEqual(resVariants.quiz?.id, '66666666-6666-4666-a666-666666666666', 'Test 20b: existingQuizId preserved');
+  assertEqual(resVariants.quiz?.questions[0].options[0].option_text, 'Yes', 'Test 20c: true_false custom options preserved');
+  assertEqual(resVariants.quiz?.questions[1].accepted_answers?.length, 3, 'Test 20d: short_text accepted answers preserved');
+  assertEqual(resVariants.quiz?.questions[2].scoring_method, 'all_or_nothing', 'Test 20e: multiple_choice default scoring method set');
+  assertEqual(resVariants.quiz?.settings.time_limit_minutes, null, 'Test 20f: timer false sets time_limit_minutes to null');
+
+  // ------------------------------------------------------------------------
+  // Test 21: convertQuizJsonToQuiz Validation Failures
+  // ------------------------------------------------------------------------
+  console.log('Scenario 21: Conversion rejection');
+  const resInvalid = convertQuizJsonToQuiz({ not_a_valid_quiz: true });
+  assert(!resInvalid.success && Array.isArray(resInvalid.errors), 'Test 21: invalid input produces structured errors');
 
   console.log('\n----------------------------------------');
   console.log(`Results: ${passed} passed, ${failed} failed`);

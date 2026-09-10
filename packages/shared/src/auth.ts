@@ -193,7 +193,8 @@ export async function verifyAdminAuthorization(
  * explicit admin authorization (admin_users table).
  */
 function parseSsrAuthCookie(cookieHeader: string, ref: string): { accessToken?: string; refreshToken?: string } {
-  const ssrMatch = cookieHeader.match(new RegExp(`(?:^|;\\s*)sb-${ref}-auth-token=([^;]+)`));
+  const regex = new RegExp(String.raw`(?:^|;\s*)sb-${ref}-auth-token=([^;]+)`);
+  const ssrMatch = regex.exec(cookieHeader);
   if (!ssrMatch) return {};
   try {
     const decoded = decodeURIComponent(ssrMatch[1]);
@@ -208,33 +209,50 @@ function parseSsrAuthCookie(cookieHeader: string, ref: string): { accessToken?: 
   return {};
 }
 
-function extractSessionTokensFromRequest(request: Request): { accessToken: string | null; refreshToken: string | null } {
-  let accessToken: string | null = null;
-  let refreshToken: string | null = null;
-  const cookieHeader = request.headers.get('cookie') || '';
+function extractNamedCookie(cookieHeader: string, cookieName: string): string | null {
+  const regex = new RegExp(String.raw`(?:^|;\s*)${cookieName}=([^;]+)`);
+  const match = regex.exec(cookieHeader);
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
-  const accessMatch = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_ACCESS_COOKIE}=([^;]+)`));
-  if (accessMatch) {
-    accessToken = decodeURIComponent(accessMatch[1]);
+function resolveSsrTokens(
+  cookieHeader: string,
+  currentAccess: string | null,
+  currentRefresh: string | null
+): { accessToken: string | null; refreshToken: string | null } {
+  if (currentAccess && currentRefresh) {
+    return { accessToken: currentAccess, refreshToken: currentRefresh };
   }
-
-  const refreshMatch = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_REFRESH_COOKIE}=([^;]+)`));
-  if (refreshMatch) {
-    refreshToken = decodeURIComponent(refreshMatch[1]);
-  }
-
   const ref = getSupabaseProjectRef();
-  if (ref && (!accessToken || !refreshToken)) {
-    const ssr = parseSsrAuthCookie(cookieHeader, ref);
-    if (!accessToken && ssr.accessToken) accessToken = ssr.accessToken;
-    if (!refreshToken && ssr.refreshToken) refreshToken = ssr.refreshToken;
+  if (!ref) {
+    return { accessToken: currentAccess, refreshToken: currentRefresh };
   }
+  const ssr = parseSsrAuthCookie(cookieHeader, ref);
+  return {
+    accessToken: currentAccess || ssr.accessToken || null,
+    refreshToken: currentRefresh || ssr.refreshToken || null
+  };
+}
+
+function extractBearerToken(request: Request): string | null {
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+  return null;
+}
+
+function extractSessionTokensFromRequest(request: Request): { accessToken: string | null; refreshToken: string | null } {
+  const cookieHeader = request.headers.get('cookie') || '';
+  let accessToken = extractNamedCookie(cookieHeader, ADMIN_ACCESS_COOKIE);
+  let refreshToken = extractNamedCookie(cookieHeader, ADMIN_REFRESH_COOKIE);
+
+  const resolved = resolveSsrTokens(cookieHeader, accessToken, refreshToken);
+  accessToken = resolved.accessToken;
+  refreshToken = resolved.refreshToken;
 
   if (!accessToken) {
-    const legacyMatch = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_LEGACY_COOKIE}=([^;]+)`));
-    if (legacyMatch) {
-      accessToken = decodeURIComponent(legacyMatch[1]);
-    }
+    accessToken = extractNamedCookie(cookieHeader, ADMIN_LEGACY_COOKIE);
   }
 
   if (!refreshToken) {
@@ -245,10 +263,7 @@ function extractSessionTokensFromRequest(request: Request): { accessToken: strin
   }
 
   if (!accessToken) {
-    const authHeader = request.headers.get('authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      accessToken = authHeader.slice(7).trim();
-    }
+    accessToken = extractBearerToken(request);
   }
 
   return { accessToken, refreshToken };

@@ -17,10 +17,10 @@ import {
 } from 'lucide-react';
 
 export interface QuizAiGeneratorProps {
-  onImport: (importedQuiz: Quiz, summary: ImportSummary) => void;
-  existingQuizId?: string;
-  defaultTitle?: string;
-  defaultDescription?: string;
+  readonly onImport: (importedQuiz: Quiz, summary: ImportSummary) => void;
+  readonly existingQuizId?: string;
+  readonly defaultTitle?: string;
+  readonly defaultDescription?: string;
 }
 
 const SAMPLE_RAW_INPUT = `1. What is the capital of France?
@@ -31,6 +31,44 @@ Answer: Mars
 
 3. Which of the following are programming languages?
 Answers: Python, JavaScript`;
+
+function processNdjsonLine(
+  line: string,
+  onProgress: (msg: string) => void
+): { complete?: any } | null {
+  if (!line.trim()) return null;
+  const msg = JSON.parse(line);
+  if (msg.type === 'progress') {
+    onProgress(msg.message);
+    return null;
+  }
+  if (msg.type === 'complete') {
+    return { complete: msg };
+  }
+  if (msg.type === 'error') {
+    const err = new Error(msg.error || 'Failed to generate quiz with AI') as any;
+    err.validationErrors = msg.validationErrors;
+    throw err;
+  }
+  return null;
+}
+
+function processNdjsonLines(lines: string[], onProgress: (msg: string) => void): any | null {
+  let completed: any = null;
+  for (const line of lines) {
+    try {
+      const res = processNdjsonLine(line, onProgress);
+      if (res?.complete) {
+        completed = res.complete;
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('Failed to generate')) {
+        throw e;
+      }
+    }
+  }
+  return completed;
+}
 
 async function readNdjsonStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
@@ -45,26 +83,11 @@ async function readNdjsonStream(
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
+    buffer = lines.pop() ?? '';
 
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const msg = JSON.parse(line);
-        if (msg.type === 'progress') {
-          onProgress(msg.message);
-        } else if (msg.type === 'complete') {
-          finalData = msg;
-        } else if (msg.type === 'error') {
-          const err = new Error(msg.error || 'Failed to generate quiz with AI') as any;
-          err.validationErrors = msg.validationErrors;
-          throw err;
-        }
-      } catch (e) {
-        if (e instanceof Error && e.message.includes('Failed to generate')) {
-          throw e;
-        }
-      }
+    const chunkResult = processNdjsonLines(lines, onProgress);
+    if (chunkResult) {
+      finalData = chunkResult;
     }
   }
 
@@ -82,13 +105,15 @@ function parseAndConvertAiQuiz(rawQuiz: any, existingQuizId?: string): { quiz: Q
   return { quiz: conv.quiz, summary: conv.summary };
 }
 
+interface AiGeneratorErrorAlertProps {
+  readonly error: string | null;
+  readonly validationErrors: readonly string[];
+}
+
 function AiGeneratorErrorAlert({
   error,
   validationErrors
-}: {
-  error: string | null;
-  validationErrors: string[];
-}) {
+}: Readonly<AiGeneratorErrorAlertProps>) {
   if (!error) return null;
   return (
     <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-2 text-xs">
@@ -108,6 +133,15 @@ function AiGeneratorErrorAlert({
   );
 }
 
+interface AiGeneratorPreviewCardProps {
+  readonly generatedJson: string | null;
+  readonly questionCount: number;
+  readonly copied: boolean;
+  readonly imported: boolean;
+  readonly onCopy: () => void;
+  readonly onUse: () => void;
+}
+
 function AiGeneratorPreviewCard({
   generatedJson,
   questionCount,
@@ -115,14 +149,7 @@ function AiGeneratorPreviewCard({
   imported,
   onCopy,
   onUse
-}: {
-  generatedJson: string | null;
-  questionCount: number;
-  copied: boolean;
-  imported: boolean;
-  onCopy: () => void;
-  onUse: () => void;
-}) {
+}: Readonly<AiGeneratorPreviewCardProps>) {
   if (!generatedJson) return null;
   return (
     <div className="mt-6 border border-purple-200 bg-purple-50/30 rounded-xl p-5 space-y-4">
@@ -180,7 +207,7 @@ export function QuizAiGenerator({
   existingQuizId,
   defaultTitle = '',
   defaultDescription = ''
-}: QuizAiGeneratorProps) {
+}: Readonly<QuizAiGeneratorProps>) {
   const [rawInput, setRawInput] = useState('');
   const [title, setTitle] = useState(defaultTitle);
   const [description, setDescription] = useState(defaultDescription);

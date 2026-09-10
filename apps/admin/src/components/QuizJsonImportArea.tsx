@@ -21,12 +21,12 @@ import {
 } from 'lucide-react';
 
 export interface QuizJsonImportAreaProps {
-  onImport: (importedQuiz: Quiz, summary: ImportSummary) => void;
-  existingQuizId?: string;
-  defaultExpanded?: boolean;
+  readonly onImport: (importedQuiz: Quiz, summary: ImportSummary) => void;
+  readonly existingQuizId?: string;
+  readonly defaultExpanded?: boolean;
 }
 
-function ValidationErrorsAlert({ errors }: { errors: string[] }) {
+function ValidationErrorsAlert({ errors }: Readonly<{ errors: readonly string[] }>) {
   if (errors.length === 0) return null;
   return (
     <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
@@ -46,7 +46,7 @@ function ValidationErrorsAlert({ errors }: { errors: string[] }) {
   );
 }
 
-function ImportSummaryAlert({ summary, onDismiss }: { summary: ImportSummary; onDismiss: () => void }) {
+function ImportSummaryAlert({ summary, onDismiss }: Readonly<{ summary: ImportSummary; onDismiss: () => void }>) {
   return (
     <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start justify-between gap-3 text-xs text-emerald-800">
       <div className="flex items-start gap-2.5">
@@ -74,15 +74,15 @@ function ImportSummaryAlert({ summary, onDismiss }: { summary: ImportSummary; on
 }
 
 interface DirectJsonImportTabProps {
-  jsonText: string;
-  setJsonText: (text: string) => void;
-  validationErrors: string[];
-  setValidationErrors: (errors: string[]) => void;
-  importSummary: ImportSummary | null;
-  setImportSummary: (summary: ImportSummary | null) => void;
-  handleClear: () => void;
-  handleImport: () => void;
-  isImporting: boolean;
+  readonly jsonText: string;
+  readonly setJsonText: (text: string) => void;
+  readonly validationErrors: readonly string[];
+  readonly setValidationErrors: (errors: string[]) => void;
+  readonly importSummary: ImportSummary | null;
+  readonly setImportSummary: (summary: ImportSummary | null) => void;
+  readonly handleClear: () => void;
+  readonly handleImport: () => void;
+  readonly isImporting: boolean;
 }
 
 function DirectJsonImportTab({
@@ -95,7 +95,7 @@ function DirectJsonImportTab({
   handleClear,
   handleImport,
   isImporting
-}: DirectJsonImportTabProps) {
+}: Readonly<DirectJsonImportTabProps>) {
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
@@ -161,7 +161,7 @@ export function QuizJsonImportArea({
   onImport,
   existingQuizId,
   defaultExpanded = true
-}: QuizJsonImportAreaProps) {
+}: Readonly<QuizJsonImportAreaProps>) {
   const [activeTab, setActiveTab] = useState<'import' | 'ai'>('import');
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [jsonText, setJsonText] = useState('');

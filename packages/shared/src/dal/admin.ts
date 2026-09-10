@@ -257,7 +257,32 @@ async function upsertLiveQuizSections(supabase: any, quizId: string, sections: Q
   }
 }
 
-async function upsertLiveQuizQuestionsAndOptions(supabase: any, quizId: string, questions: Question[]): Promise<void> {
+function prepareQuestionRecord(q: Question, qIdx: number, quizId: string, qId: string): any {
+  return {
+    id: qId,
+    quiz_id: quizId,
+    section_id: q.section_id && UUID_REGEX.test(q.section_id) ? q.section_id : null,
+    question_text: q.question_text,
+    question_description: q.question_description ?? null,
+    question_type: q.question_type,
+    question_image: q.question_image ?? null,
+    marks: q.marks ?? 5,
+    negative_marks: q.negative_marks ?? 0,
+    required: q.required ?? true,
+    question_order: q.question_order ?? (qIdx + 1),
+    section_title: q.section_title ?? null,
+    section_description: q.section_description ?? null,
+    time_limit_seconds: q.time_limit_seconds ?? null,
+    scoring_method: q.scoring_method ?? 'all_or_nothing',
+    accepted_answers: q.accepted_answers ?? [],
+    case_sensitive: q.case_sensitive ?? false,
+    trim_whitespace: q.trim_whitespace ?? true,
+    normalize_spaces: q.normalize_spaces ?? true,
+    updated_at: new Date().toISOString()
+  };
+}
+
+function prepareQuestionAndOptionRecords(quizId: string, questions: Question[]) {
   const questionIds: string[] = [];
   const questionsToUpsert: any[] = [];
   const optionsPerQuestion: { questionId: string; options: any[] }[] = [];
@@ -266,31 +291,9 @@ async function upsertLiveQuizQuestionsAndOptions(supabase: any, quizId: string, 
     const q = questions[qIdx];
     const qId = ensureUuid(q.id);
     questionIds.push(qId);
+    questionsToUpsert.push(prepareQuestionRecord(q, qIdx, quizId, qId));
 
-    questionsToUpsert.push({
-      id: qId,
-      quiz_id: quizId,
-      section_id: q.section_id && UUID_REGEX.test(q.section_id) ? q.section_id : null,
-      question_text: q.question_text,
-      question_description: q.question_description ?? null,
-      question_type: q.question_type,
-      question_image: q.question_image ?? null,
-      marks: q.marks ?? 5,
-      negative_marks: q.negative_marks ?? 0,
-      required: q.required ?? true,
-      question_order: q.question_order ?? (qIdx + 1),
-      section_title: q.section_title ?? null,
-      section_description: q.section_description ?? null,
-      time_limit_seconds: q.time_limit_seconds ?? null,
-      scoring_method: q.scoring_method ?? 'all_or_nothing',
-      accepted_answers: q.accepted_answers ?? [],
-      case_sensitive: q.case_sensitive ?? false,
-      trim_whitespace: q.trim_whitespace ?? true,
-      normalize_spaces: q.normalize_spaces ?? true,
-      updated_at: new Date().toISOString()
-    });
-
-    if (q.options && Array.isArray(q.options)) {
+    if (Array.isArray(q.options)) {
       const optList = q.options.map((opt, optIdx) => ({
         id: ensureUuid(opt.id),
         question_id: qId,
@@ -302,6 +305,33 @@ async function upsertLiveQuizQuestionsAndOptions(supabase: any, quizId: string, 
       optionsPerQuestion.push({ questionId: qId, options: optList });
     }
   }
+
+  return { questionIds, questionsToUpsert, optionsPerQuestion };
+}
+
+async function syncLiveQuestionOptions(
+  supabase: any,
+  optionsPerQuestion: { questionId: string; options: any[] }[]
+): Promise<void> {
+  for (const { questionId, options } of optionsPerQuestion) {
+    const optIds = options.map(o => o.id);
+    if (optIds.length > 0) {
+      await supabase
+        .from('options')
+        .delete()
+        .eq('question_id', questionId)
+        .not('id', 'in', `(${optIds.join(',')})`);
+
+      const { error: optError } = await supabase.from('options').upsert(options);
+      if (optError) throw new Error(`Supabase options error: ${optError.message}`);
+    } else {
+      await supabase.from('options').delete().eq('question_id', questionId);
+    }
+  }
+}
+
+async function upsertLiveQuizQuestionsAndOptions(supabase: any, quizId: string, questions: Question[]): Promise<void> {
+  const { questionIds, questionsToUpsert, optionsPerQuestion } = prepareQuestionAndOptionRecords(quizId, questions);
 
   if (questionIds.length > 0) {
     await supabase
@@ -320,21 +350,7 @@ async function upsertLiveQuizQuestionsAndOptions(supabase: any, quizId: string, 
     }
   }
 
-  for (const { questionId, options } of optionsPerQuestion) {
-    const optIds = options.map(o => o.id);
-    if (optIds.length > 0) {
-      await supabase
-        .from('options')
-        .delete()
-        .eq('question_id', questionId)
-        .not('id', 'in', `(${optIds.join(',')})`);
-
-      const { error: optError } = await supabase.from('options').upsert(options);
-      if (optError) throw new Error(`Supabase options error: ${optError.message}`);
-    } else {
-      await supabase.from('options').delete().eq('question_id', questionId);
-    }
-  }
+  await syncLiveQuestionOptions(supabase, optionsPerQuestion);
 }
 
 async function saveLiveQuiz(
@@ -601,6 +617,54 @@ export async function exportQuizToJson(quizId: string): Promise<QuizJsonImportFo
 /**
  * Retrieves paginated participant responses with server-side filtering, search, and summary metrics.
  */
+function applyScoreAndDateFilters(query: any, filters: ResponsesFilterParams): any {
+  let q = query;
+  if (filters.minScore !== undefined && filters.minScore !== null) {
+    q = q.gte('score', filters.minScore);
+  }
+  if (filters.maxScore !== undefined && filters.maxScore !== null) {
+    q = q.lte('score', filters.maxScore);
+  }
+  if (filters.startDate) {
+    q = q.gte('submitted_at', filters.startDate);
+  }
+  if (filters.endDate) {
+    q = q.lte('submitted_at', filters.endDate);
+  }
+  return q;
+}
+
+function buildLiveSubmissionQuery(supabase: any, filters: ResponsesFilterParams): any {
+  let query = supabase.from('submissions').select('*').order(filters.sortBy || 'submitted_at', {
+    ascending: filters.sortOrder === 'asc'
+  });
+
+  if (filters.quizId) {
+    query = query.eq('quiz_id', filters.quizId);
+  }
+  if (filters.status === 'passed') {
+    query = query.eq('passed', true);
+  } else if (filters.status === 'failed') {
+    query = query.eq('passed', false);
+  }
+
+  return applyScoreAndDateFilters(query, filters);
+}
+
+async function fetchLiveSubmissionsAndQuizzes(
+  supabase: any,
+  filters: ResponsesFilterParams
+): Promise<{ submissions: Submission[]; quizzes: Quiz[] }> {
+  const query = buildLiveSubmissionQuery(supabase, filters);
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(`Supabase getResponsesPaginated error: ${error.message}`);
+  }
+  const submissions = (data as Submission[]) || [];
+  const quizzes = await getAllQuizzes();
+  return { submissions, quizzes };
+}
+
 async function fetchSubmissionsAndQuizzes(
   filters: ResponsesFilterParams,
   isLive: boolean
@@ -608,38 +672,7 @@ async function fetchSubmissionsAndQuizzes(
   if (isLive) {
     const supabase = getSupabaseAdminClient();
     if (supabase) {
-      let query = supabase.from('submissions').select('*').order(filters.sortBy || 'submitted_at', {
-        ascending: filters.sortOrder === 'asc'
-      });
-
-      if (filters.quizId) {
-        query = query.eq('quiz_id', filters.quizId);
-      }
-      if (filters.status === 'passed') {
-        query = query.eq('passed', true);
-      } else if (filters.status === 'failed') {
-        query = query.eq('passed', false);
-      }
-      if (filters.minScore !== undefined && filters.minScore !== null) {
-        query = query.gte('score', filters.minScore);
-      }
-      if (filters.maxScore !== undefined && filters.maxScore !== null) {
-        query = query.lte('score', filters.maxScore);
-      }
-      if (filters.startDate) {
-        query = query.gte('submitted_at', filters.startDate);
-      }
-      if (filters.endDate) {
-        query = query.lte('submitted_at', filters.endDate);
-      }
-
-      const { data, error } = await query;
-      if (error) {
-        throw new Error(`Supabase getResponsesPaginated error: ${error.message}`);
-      }
-      const submissions = (data as Submission[]) || [];
-      const quizzes = await getAllQuizzes();
-      return { submissions, quizzes };
+      return fetchLiveSubmissionsAndQuizzes(supabase, filters);
     }
   }
 
@@ -695,7 +728,7 @@ function filterMockResponseItems(items: ResponseListItem[], filters: ResponsesFi
 }
 
 function searchResponseItems(items: ResponseListItem[], search?: string): ResponseListItem[] {
-  if (!search || !search.trim()) return items;
+  if (!search?.trim()) return items;
   const query = search.toLowerCase().trim();
   return items.filter(i => {
     const nameMatch = i.participant_name.toLowerCase().includes(query);

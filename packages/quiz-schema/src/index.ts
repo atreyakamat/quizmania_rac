@@ -517,50 +517,65 @@ function validateOptionIds(options: any[], qNum: number, errors: string[]): void
   });
 }
 
+function validateSingleChoiceQuestion(q: any, qNum: number, errors: string[]): void {
+  if (!Array.isArray(q.options) || q.options.length < 2) {
+    errors.push(`Question ${qNum}: single_choice questions must have at least 2 options.`);
+    return;
+  }
+  const correctCount = q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).length;
+  if (correctCount === 0) {
+    errors.push(`Question ${qNum}: single_choice questions must have exactly one correct option (none found).`);
+  } else if (correctCount > 1) {
+    errors.push(`Question ${qNum}: single_choice questions must have exactly one correct option (${correctCount} found).`);
+  }
+}
+
+function validateMultipleChoiceQuestion(q: any, qNum: number, errors: string[]): void {
+  if (!Array.isArray(q.options) || q.options.length < 2) {
+    errors.push(`Question ${qNum}: multiple_choice questions must have at least 2 options.`);
+    return;
+  }
+  const correctCount = q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).length;
+  if (correctCount === 0) {
+    errors.push(`Question ${qNum}: multiple_choice questions must have at least one correct option.`);
+  }
+}
+
+function validateTrueFalseQuestion(q: any, qNum: number, errors: string[]): void {
+  if (!Array.isArray(q.options)) return;
+  if (q.options.length !== 2) {
+    errors.push(`Question ${qNum}: true_false questions must have exactly 2 options (True and False).`);
+    return;
+  }
+  const correctCount = q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).length;
+  if (correctCount !== 1) {
+    errors.push(`Question ${qNum}: true_false questions must have exactly one correct option.`);
+  }
+}
+
+function validateShortTextQuestion(q: any, qNum: number, errors: string[]): void {
+  const marksVal = Number(q.marks ?? 1);
+  if (marksVal <= 0) return;
+
+  const accepted = q.acceptedAnswers ?? q.accepted_answers ?? (
+    Array.isArray(q.options)
+      ? q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).map((o: any) => o?.text ?? o?.option_text)
+      : []
+  );
+  if (!Array.isArray(accepted) || accepted.length === 0 || accepted.every((a: any) => !String(a).trim())) {
+    errors.push(`Question ${qNum}: short_text questions must have at least one accepted answer.`);
+  }
+}
+
 function validateQuestionSpecificType(q: any, normalizedType: string, qNum: number, errors: string[]): void {
   if (normalizedType === 'single_choice') {
-    if (!Array.isArray(q.options) || q.options.length < 2) {
-      errors.push(`Question ${qNum}: single_choice questions must have at least 2 options.`);
-    } else {
-      const correctCount = q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).length;
-      if (correctCount === 0) {
-        errors.push(`Question ${qNum}: single_choice questions must have exactly one correct option (none found).`);
-      } else if (correctCount > 1) {
-        errors.push(`Question ${qNum}: single_choice questions must have exactly one correct option (${correctCount} found).`);
-      }
-    }
+    validateSingleChoiceQuestion(q, qNum, errors);
   } else if (normalizedType === 'multiple_choice') {
-    if (!Array.isArray(q.options) || q.options.length < 2) {
-      errors.push(`Question ${qNum}: multiple_choice questions must have at least 2 options.`);
-    } else {
-      const correctCount = q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).length;
-      if (correctCount === 0) {
-        errors.push(`Question ${qNum}: multiple_choice questions must have at least one correct option.`);
-      }
-    }
+    validateMultipleChoiceQuestion(q, qNum, errors);
   } else if (normalizedType === 'true_false') {
-    if (Array.isArray(q.options)) {
-      if (q.options.length !== 2) {
-        errors.push(`Question ${qNum}: true_false questions must have exactly 2 options (True and False).`);
-      } else {
-        const correctCount = q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).length;
-        if (correctCount !== 1) {
-          errors.push(`Question ${qNum}: true_false questions must have exactly one correct option.`);
-        }
-      }
-    }
+    validateTrueFalseQuestion(q, qNum, errors);
   } else if (normalizedType === 'short_text') {
-    const marksVal = Number(q.marks ?? 1);
-    if (marksVal > 0) {
-      const accepted = q.acceptedAnswers ?? q.accepted_answers ?? (
-        Array.isArray(q.options)
-          ? q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).map((o: any) => o?.text ?? o?.option_text)
-          : []
-      );
-      if (!Array.isArray(accepted) || accepted.length === 0 || accepted.every((a: any) => !String(a).trim())) {
-        errors.push(`Question ${qNum}: short_text questions must have at least one accepted answer.`);
-      }
-    }
+    validateShortTextQuestion(q, qNum, errors);
   }
 }
 

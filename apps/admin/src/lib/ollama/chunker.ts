@@ -20,22 +20,47 @@ export const DEFAULT_CHUNK_MAX_CHARS = 1000;
 export function getChunkMaxChars(): number {
   if (typeof process !== 'undefined' && process.env.OLLAMA_CHUNK_MAX_CHARS) {
     const parsed = parseInt(process.env.OLLAMA_CHUNK_MAX_CHARS, 10);
-    if (!isNaN(parsed) && parsed > 100) {
+    if (!Number.isNaN(parsed) && parsed > 100) {
       return parsed;
     }
   }
   return DEFAULT_CHUNK_MAX_CHARS;
 }
 
-function findLastRegexBoundary(regex: RegExp, slice: string, maxChars: number): number {
-  let match: RegExpExecArray | null;
-  let lastBoundary = -1;
-  while ((match = regex.exec(slice)) !== null) {
-    if (match.index > 0 && match.index < maxChars) {
-      lastBoundary = match.index;
+function isQuestionHeader(afterNewline: string): boolean {
+  return /^(?:---|\*\*)?(?:###\s*)?(?:Question\s*\d+|Q\d+[:.\s]|\d+[.)])\s+/i.test(
+    afterNewline.trimStart()
+  );
+}
+
+function isOptionOrAnswerHeader(afterNewline: string): boolean {
+  return /^(?:[a-z0-9][.)]|(?:Correct\s+)?Answer|Accepted|Explanation):?\s*/i.test(
+    afterNewline.trimStart()
+  );
+}
+
+function findLastQuestionBoundary(slice: string, maxChars: number): number {
+  let lastPos = -1;
+  let newlineIdx = slice.indexOf('\n');
+  while (newlineIdx !== -1 && newlineIdx < maxChars) {
+    if (newlineIdx > 0 && isQuestionHeader(slice.slice(newlineIdx + 1))) {
+      lastPos = newlineIdx;
     }
+    newlineIdx = slice.indexOf('\n', newlineIdx + 1);
   }
-  return lastBoundary;
+  return lastPos;
+}
+
+function findLastSafeNewline(slice: string, maxChars: number): number {
+  let lastPos = -1;
+  let newlineIdx = slice.indexOf('\n');
+  while (newlineIdx !== -1 && newlineIdx < maxChars) {
+    if (newlineIdx > 0 && !isOptionOrAnswerHeader(slice.slice(newlineIdx + 1))) {
+      lastPos = newlineIdx;
+    }
+    newlineIdx = slice.indexOf('\n', newlineIdx + 1);
+  }
+  return lastPos;
 }
 
 /**
@@ -50,27 +75,19 @@ export function findSafeQuestionBoundary(slice: string, maxChars: number): numbe
   const minAcceptableBoundary = Math.min(100, Math.floor(maxChars * 0.1));
 
   // 1. Primary: Question boundary preceded by newline(s)
-  const questionBoundary = findLastRegexBoundary(
-    /\n+(?=(?:---\s*\n+)?(?:\*\*)?(?:###\s*)?(?:Question\s*\d+|Q\d+[\.:\s]|\d+[\.\)])\s+)/gi,
-    slice,
-    maxChars
-  );
+  const questionBoundary = findLastQuestionBoundary(slice, maxChars);
   if (questionBoundary >= minAcceptableBoundary) {
     return questionBoundary;
   }
 
   // 2. Secondary fallback: Blank line boundary (double newline)
-  const paragraphBoundary = findLastRegexBoundary(/\n\s*\n+/g, slice, maxChars);
+  const paragraphBoundary = slice.lastIndexOf('\n\n', maxChars - 1);
   if (paragraphBoundary >= minAcceptableBoundary) {
     return paragraphBoundary;
   }
 
   // 3. Tertiary fallback: Newline that does not split inside option lists or Answer lines
-  const safeNewlineBoundary = findLastRegexBoundary(
-    /\n(?!\s*(?:[A-Za-z0-9][\.\)]|(?:Correct\s+)?Answer|Accepted|Explanation):?\s*)/gi,
-    slice,
-    maxChars
-  );
+  const safeNewlineBoundary = findLastSafeNewline(slice, maxChars);
   if (safeNewlineBoundary >= minAcceptableBoundary) {
     return safeNewlineBoundary;
   }

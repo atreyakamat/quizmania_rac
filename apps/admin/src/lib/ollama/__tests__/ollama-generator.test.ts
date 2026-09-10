@@ -1,3 +1,4 @@
+import { test } from 'node:test';
 import { extractJsonFromOllamaResponse } from '../service';
 import { buildRawTextConversionPrompt, QUIZMANIA_RAW_TEXT_SYSTEM_PROMPT } from '../prompts';
 import { validateQuizJson, convertQuizJsonToQuiz } from '@quizmania/quiz-schema';
@@ -181,6 +182,22 @@ Let me know if you need anything else!`;
   assert(longChunks.join('') === longQuestions, 'No characters skipped or overlapped');
   // Check question boundary preservation (no chunk starts mid-option)
   assert(longChunks[1].trimStart().startsWith('Question '), 'Chunk 2 starts at question boundary');
+
+  // 4c. Empty text returns empty array
+  const emptyChunks = splitIntoQuestionChunks('', 600);
+  assertEqual(emptyChunks.length, 0, 'Empty text returns empty chunk array');
+
+  // 4d. Unbroken text without newlines splits at hard limit
+  const unbrokenText = 'A'.repeat(500);
+  const unbrokenChunks = splitIntoQuestionChunks(unbrokenText, 200);
+  assert(unbrokenChunks.length === 3, 'Unbroken text splits at hard limit');
+  assertEqual(unbrokenChunks.join(''), unbrokenText, 'Unbroken text reconstructs perfectly');
+
+  // 4e. Text with safe newlines but no question markers
+  const plainParagraphs = 'First long paragraph of context.\n\nSecond long paragraph of context.\n\nThird long paragraph.';
+  const paragraphChunks = splitIntoQuestionChunks(plainParagraphs, 40);
+  assert(paragraphChunks.length > 1, 'Splits along safe newline/paragraph boundaries');
+  assertEqual(paragraphChunks.join(''), plainParagraphs, 'Paragraph chunks reconstruct perfectly');
 
   // 5. Testing Multi-chunk Merge & Re-index
   console.log('\n5. Testing Multi-chunk Merge and Re-index:');

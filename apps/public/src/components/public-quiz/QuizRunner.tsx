@@ -189,13 +189,15 @@ function buildFormattedSubmissionAnswers(
 
 // --- SUB-COMPONENTS ---
 
+interface QuizTopTimerBarProps {
+  readonly quizTitle: string;
+  readonly secondsRemaining: number;
+}
+
 function QuizTopTimerBar({
   quizTitle,
   secondsRemaining
-}: {
-  quizTitle: string;
-  secondsRemaining: number;
-}) {
+}: Readonly<QuizTopTimerBarProps>) {
   return (
     <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-black/10 px-4 py-2.5 shadow-sm flex items-center justify-between">
       <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
@@ -215,17 +217,19 @@ function QuizTopTimerBar({
   );
 }
 
+interface QuizLandingStepProps {
+  readonly quiz: PublicQuiz;
+  readonly currentAvailability: QuizAvailability;
+  readonly upcomingSecondsRemaining: number | null;
+  readonly onBegin: () => void;
+}
+
 function QuizLandingStep({
   quiz,
   currentAvailability,
   upcomingSecondsRemaining,
   onBegin
-}: {
-  quiz: PublicQuiz;
-  currentAvailability: QuizAvailability;
-  upcomingSecondsRemaining: number | null;
-  onBegin: () => void;
-}) {
+}: Readonly<QuizLandingStepProps>) {
   return (
     <div
       className="rounded-3xl border border-black/10 overflow-hidden shadow-xl bg-white"
@@ -401,19 +405,21 @@ function QuizLandingStep({
   );
 }
 
+interface QuizParticipantStepProps {
+  readonly quiz: PublicQuiz;
+  readonly participant: ParticipantInfo;
+  readonly setParticipant: React.Dispatch<React.SetStateAction<ParticipantInfo>>;
+  readonly participantError: string | null;
+  readonly onSubmit: (e: React.FormEvent) => void;
+}
+
 function QuizParticipantStep({
   quiz,
   participant,
   setParticipant,
   participantError,
   onSubmit
-}: {
-  quiz: PublicQuiz;
-  participant: ParticipantInfo;
-  setParticipant: React.Dispatch<React.SetStateAction<ParticipantInfo>>;
-  participantError: string | null;
-  onSubmit: (e: React.FormEvent) => void;
-}) {
+}: Readonly<QuizParticipantStepProps>) {
   return (
     <div
       className="rounded-3xl border border-black/10 p-6 sm:p-10 shadow-xl bg-white space-y-6"
@@ -537,15 +543,17 @@ function QuizParticipantStep({
   );
 }
 
+interface QuizSingleChoiceOptionsProps {
+  readonly question: PublicQuestion;
+  readonly selectedId?: string;
+  readonly onSelect: (optionId: string) => void;
+}
+
 function QuizSingleChoiceOptions({
   question,
   selectedId,
   onSelect
-}: {
-  question: PublicQuestion;
-  selectedId?: string;
-  onSelect: (optionId: string) => void;
-}) {
+}: Readonly<QuizSingleChoiceOptionsProps>) {
   const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
 
   return (
@@ -593,15 +601,17 @@ function QuizSingleChoiceOptions({
   );
 }
 
+interface QuizMultipleChoiceOptionsProps {
+  readonly question: PublicQuestion;
+  readonly selectedIds: readonly string[];
+  readonly onToggle: (optionId: string) => void;
+}
+
 function QuizMultipleChoiceOptions({
   question,
   selectedIds,
   onToggle
-}: {
-  question: PublicQuestion;
-  selectedIds: string[];
-  onToggle: (optionId: string) => void;
-}) {
+}: Readonly<QuizMultipleChoiceOptionsProps>) {
   return (
     <div className="space-y-2.5 pt-1">
       <span className="text-[11px] font-bold text-[#A50D52] block">
@@ -650,6 +660,22 @@ function QuizMultipleChoiceOptions({
   );
 }
 
+interface QuizQuestionsStepProps {
+  readonly question: PublicQuestion;
+  readonly totalQuestions: number;
+  readonly currentIndex: number;
+  readonly answeredCount: number;
+  readonly singleAnswer?: string;
+  readonly multiAnswers: readonly string[];
+  readonly textAnswer?: string;
+  readonly onSelectSingleOption: (qId: string, optId: string) => void;
+  readonly onToggleMultiOption: (qId: string, optId: string) => void;
+  readonly onTextAnswerChange: (qId: string, val: string) => void;
+  readonly onPrev: () => void;
+  readonly onNext: () => void;
+  readonly onReview: () => void;
+}
+
 function QuizQuestionsStep({
   question,
   totalQuestions,
@@ -664,21 +690,7 @@ function QuizQuestionsStep({
   onPrev,
   onNext,
   onReview
-}: {
-  question: PublicQuestion;
-  totalQuestions: number;
-  currentIndex: number;
-  answeredCount: number;
-  singleAnswer?: string;
-  multiAnswers: string[];
-  textAnswer?: string;
-  onSelectSingleOption: (qId: string, optId: string) => void;
-  onToggleMultiOption: (qId: string, optId: string) => void;
-  onTextAnswerChange: (qId: string, val: string) => void;
-  onPrev: () => void;
-  onNext: () => void;
-  onReview: () => void;
-}) {
+}: Readonly<QuizQuestionsStepProps>) {
   return (
     <div
       className="rounded-3xl border border-black/10 overflow-hidden shadow-xl bg-white"
@@ -862,6 +874,19 @@ function QuizQuestionsStep({
   );
 }
 
+interface QuizReviewStepProps {
+  readonly questions: readonly PublicQuestion[];
+  readonly singleAnswers: Record<string, string>;
+  readonly multiAnswers: Record<string, string[]>;
+  readonly textAnswers: Record<string, string>;
+  readonly unansweredRequiredCount: number;
+  readonly submitError: string | null;
+  readonly isSubmitting: boolean;
+  readonly onSelectQuestion: (idx: number) => void;
+  readonly onReturnToQuestions: () => void;
+  readonly onSubmit: () => void;
+}
+
 function QuizReviewStep({
   questions,
   singleAnswers,
@@ -873,18 +898,7 @@ function QuizReviewStep({
   onSelectQuestion,
   onReturnToQuestions,
   onSubmit
-}: {
-  questions: PublicQuestion[];
-  singleAnswers: Record<string, string>;
-  multiAnswers: Record<string, string[]>;
-  textAnswers: Record<string, string>;
-  unansweredRequiredCount: number;
-  submitError: string | null;
-  isSubmitting: boolean;
-  onSelectQuestion: (idx: number) => void;
-  onReturnToQuestions: () => void;
-  onSubmit: () => void;
-}) {
+}: Readonly<QuizReviewStepProps>) {
   return (
     <div
       className="rounded-3xl border border-black/10 p-6 sm:p-10 shadow-xl bg-white space-y-6"
@@ -993,13 +1007,15 @@ function QuizReviewStep({
   );
 }
 
+interface QuizCompletionStepProps {
+  readonly participant: ParticipantInfo;
+  readonly result: QuizSubmissionResult;
+}
+
 function QuizCompletionStep({
   participant,
   result
-}: {
-  participant: ParticipantInfo;
-  result: QuizSubmissionResult;
-}) {
+}: Readonly<QuizCompletionStepProps>) {
   return (
     <div
       className="rounded-3xl border border-black/10 p-6 sm:p-12 text-center shadow-2xl bg-white space-y-6"
@@ -1066,7 +1082,7 @@ function QuizCompletionStep({
 
 // --- MAIN RUNNER COMPONENT ---
 
-export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
+export function QuizRunner({ quiz }: Readonly<{ quiz: PublicQuiz }>) {
   const [step, setStep] = useState<FlowStep>('landing');
   const [participant, setParticipant] = useState<ParticipantInfo>({
     name: '',
@@ -1099,7 +1115,6 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
     totalDurationMinutes ? totalDurationMinutes * 60 : null
   );
   const [serverExpiresAt, setServerExpiresAt] = useState<string | null>(null);
-  const [, setTimerExpired] = useState(false);
 
   // Availability & schedule state
   const [currentAvailability, setCurrentAvailability] = useState<QuizAvailability>(
@@ -1161,7 +1176,6 @@ export function QuizRunner({ quiz }: { quiz: PublicQuiz }) {
     if (secondsRemaining === null) return;
 
     if (secondsRemaining <= 0) {
-      setTimerExpired(true);
       if (quiz.settings?.auto_submit_on_expire ?? true) {
         handleFinalSubmit();
       }

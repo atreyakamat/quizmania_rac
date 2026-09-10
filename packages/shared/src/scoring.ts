@@ -263,7 +263,7 @@ async function fetchQuizForSubmission(quizIdentifier: string, isLive: boolean): 
 
   if (process.env.NODE_ENV === 'production') return null;
   const found = mockStore.getQuizzes().find(q => q.id === quizIdentifier || q.slug === quizIdentifier);
-  return found && found.status === 'published' ? found : null;
+  return found?.status === 'published' ? found : null;
 }
 
 async function isDuplicateAttempt(attemptId: string | undefined, isLive: boolean): Promise<boolean> {
@@ -281,28 +281,35 @@ async function isDuplicateAttempt(attemptId: string | undefined, isLive: boolean
   return mockStore.submissions.some(s => s.attempt_id === attemptId);
 }
 
+function isQuestionAnswered(ans?: SelectedAnswer): boolean {
+  if (!ans) return false;
+  if (ans.selectedOptionId) return true;
+  if (ans.selectedOptionIds && ans.selectedOptionIds.length > 0) return true;
+  return Boolean(ans.textAnswer?.trim());
+}
+
+function hasValidOptionSelections(q: Question, ans?: SelectedAnswer): boolean {
+  if (!['single_choice', 'multiple_choice', 'true_false'].includes(q.question_type)) {
+    return true;
+  }
+  const validOptionIds = (q.options || []).map(o => o.id);
+  if (ans?.selectedOptionId && !validOptionIds.includes(ans.selectedOptionId)) {
+    return false;
+  }
+  if (ans?.selectedOptionIds?.some(id => !validOptionIds.includes(id))) {
+    return false;
+  }
+  return true;
+}
+
 function validateQuestionSelections(questions: Question[], answerMap: Map<string, SelectedAnswer>): string | null {
   for (const q of questions) {
     const ans = answerMap.get(q.id);
-    if (['single_choice', 'multiple_choice', 'true_false'].includes(q.question_type)) {
-      const validOptionIds = (q.options || []).map(o => o.id);
-      if (ans?.selectedOptionId && !validOptionIds.includes(ans.selectedOptionId)) {
-        return `Invalid option selected for question: "${q.question_text}"`;
-      }
-      if (ans?.selectedOptionIds?.some(id => !validOptionIds.includes(id))) {
-        return `Invalid option selected for question: "${q.question_text}"`;
-      }
+    if (!hasValidOptionSelections(q, ans)) {
+      return `Invalid option selected for question: "${q.question_text}"`;
     }
-
-    if (q.required) {
-      const isAnswered = Boolean(
-        ans?.selectedOptionId || 
-        (ans?.selectedOptionIds && ans.selectedOptionIds.length > 0) || 
-        ans?.textAnswer?.trim()
-      );
-      if (!isAnswered) {
-        return `Missing required question: "${q.question_text}"`;
-      }
+    if (q.required && !isQuestionAnswered(ans)) {
+      return `Missing required question: "${q.question_text}"`;
     }
   }
   return null;

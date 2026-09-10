@@ -99,6 +99,7 @@ export function getSupabaseServiceKey(): string | null {
 }
 
 export function isSupabaseConfigured(): boolean {
+  if (publicClientInstance) return true;
   const url = getSupabaseUrl();
   const anonKey = getSupabaseAnonKey();
   return Boolean(url && anonKey && !url.includes('placeholder') && !url.includes('your-project'));
@@ -110,10 +111,31 @@ export function resetSupabaseClients(): void {
   dbReadyCache = null;
 }
 
+export function setMockSupabaseClients(clients: {
+  publicClient?: any;
+  adminClient?: any;
+  ready?: boolean;
+} | null): void {
+  if (clients === null) {
+    resetSupabaseClients();
+    return;
+  }
+  if (clients.publicClient !== undefined) {
+    publicClientInstance = clients.publicClient;
+  }
+  if (clients.adminClient !== undefined) {
+    adminClientInstance = clients.adminClient;
+  }
+  if (clients.ready !== undefined) {
+    dbReadyCache = { ready: clients.ready, timestamp: Date.now() + 3600000 };
+  }
+}
+
 export function isSupabaseAdminConfigured(): boolean {
   if (typeof window !== 'undefined') {
     return false;
   }
+  if (adminClientInstance) return true;
   const url = getSupabaseUrl();
   const serviceKey = getSupabaseServiceKey();
   return Boolean(url && serviceKey && !url.includes('placeholder'));
@@ -210,6 +232,10 @@ let dbReadyCache: { ready: boolean; timestamp: number } | null = null;
  * Verifies that Supabase is both configured and has the required database schema (public.quizzes table) available.
  */
 export async function isSupabaseDatabaseReady(): Promise<boolean> {
+  const now = Date.now();
+  if (dbReadyCache && now < dbReadyCache.timestamp) {
+    return dbReadyCache.ready;
+  }
   if (process.env.FORCE_MOCK_STORE === 'true') {
     return false;
   }
@@ -217,27 +243,19 @@ export async function isSupabaseDatabaseReady(): Promise<boolean> {
     return false;
   }
 
-  const now = Date.now();
-  if (dbReadyCache && now - dbReadyCache.timestamp < 5000) {
-    return dbReadyCache.ready;
-  }
-
   const supabase = getSupabaseAdminClient() || getSupabasePublicClient();
   if (!supabase) {
-    dbReadyCache = { ready: false, timestamp: now };
+    dbReadyCache = { ready: false, timestamp: now + 5000 };
     return false;
   }
 
   try {
     const { error } = await supabase.from('quizzes').select('id').limit(1);
-    if (!error) {
-      dbReadyCache = { ready: true, timestamp: now };
-      return true;
-    }
-    dbReadyCache = { ready: false, timestamp: now };
-    return false;
+    const ready = !error;
+    dbReadyCache = { ready, timestamp: now + 5000 };
+    return ready;
   } catch {
-    dbReadyCache = { ready: false, timestamp: now };
+    dbReadyCache = { ready: false, timestamp: now + 5000 };
     return false;
   }
 }
