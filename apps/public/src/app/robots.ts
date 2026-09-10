@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/api/diagnostic']
+        disallow: ['/api/']
       }
     ],
     sitemap: 'https://quizmania.atreyakamat.dev/sitemap.xml'

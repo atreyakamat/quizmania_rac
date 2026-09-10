@@ -482,65 +482,48 @@ async function runSecurityTests() {
   assert(/samesite=lax/i.test(setCookieHeader), '29l. Production Set-Cookie header contains SameSite=Lax attribute');
 
   // -------------------------------------------------------------
-  // Test 30: Unified Diagnostic & Health Endpoint Access Control
+  // Test 30: Architectural Diagnostic & Health Endpoint Segregation
   // -------------------------------------------------------------
-  const { GET: publicDiagHandler } = await import('../../../../apps/public/src/app/api/diagnostic/route');
   const { GET: adminDiagHandler } = await import('../../../../apps/admin/src/app/api/diagnostic/route');
   const { GET: healthHandler } = await import('../../../../apps/public/src/app/api/health/route');
 
-  // 30a: Public diagnostic rejects unauthenticated caller
-  const publicUnauthDiagReq = new Request('http://localhost:3010/api/diagnostic') as any;
-  const publicUnauthDiagRes = await publicDiagHandler(publicUnauthDiagReq);
-  assertEqual(publicUnauthDiagRes.status, 401,
-    '30a. Public diagnostic endpoint rejects unauthenticated caller with 401 Unauthorized');
-
-  // 30b: Public diagnostic rejects legacy x-diagnostic-key (no bypass)
-  const publicLegacyKeyDiagReq = new Request('http://localhost:3010/api/diagnostic', {
-    headers: { 'x-diagnostic-key': 'test-diag-key' }
-  }) as any;
-  const publicLegacyKeyDiagRes = await publicDiagHandler(publicLegacyKeyDiagReq);
-  assertEqual(publicLegacyKeyDiagRes.status, 401,
-    '30b. Public diagnostic endpoint strictly rejects x-diagnostic-key; admin session required');
-
-  // 30c: Public diagnostic accepts authenticated admin session
-  const publicAdminDiagReq = new Request('http://localhost:3010/api/diagnostic', {
-    headers: { cookie: `${ADMIN_COOKIE_NAME}=test-admin-token` }
-  }) as any;
-  const publicAdminDiagRes = await publicDiagHandler(publicAdminDiagReq);
-  assertEqual(publicAdminDiagRes.status, 200,
-    '30c. Public diagnostic endpoint succeeds with authenticated admin session (200 OK)');
-
-  // 30d: Admin diagnostic rejects unauthenticated caller
+  // 30a: Admin diagnostic rejects unauthenticated caller
   const adminUnauthDiagReq = new Request('http://localhost:3011/api/diagnostic');
   const adminUnauthDiagRes = await adminDiagHandler(adminUnauthDiagReq);
   assertEqual(adminUnauthDiagRes.status, 401,
-    '30d. Admin diagnostic endpoint rejects unauthenticated caller with 401 Unauthorized');
+    '30a. Admin diagnostic endpoint rejects unauthenticated caller with 401 Unauthorized');
 
-  // 30e: Admin diagnostic rejects legacy x-diagnostic-key
+  // 30b: Admin diagnostic rejects legacy x-diagnostic-key
   const adminLegacyKeyDiagReq = new Request('http://localhost:3011/api/diagnostic', {
     headers: { 'x-diagnostic-key': 'test-diag-key' }
   });
   const adminLegacyKeyDiagRes = await adminDiagHandler(adminLegacyKeyDiagReq);
   assertEqual(adminLegacyKeyDiagRes.status, 401,
-    '30e. Admin diagnostic endpoint strictly rejects x-diagnostic-key; admin session required');
+    '30b. Admin diagnostic endpoint strictly rejects x-diagnostic-key; admin session required');
 
-  // 30f: Admin diagnostic accepts authenticated admin session
+  // 30c: Admin diagnostic accepts authenticated admin session
   const adminAuthDiagReq = new Request('http://localhost:3011/api/diagnostic', {
     headers: { cookie: `${ADMIN_COOKIE_NAME}=test-admin-token` }
   });
   const adminAuthDiagRes = await adminDiagHandler(adminAuthDiagReq);
   assertEqual(adminAuthDiagRes.status, 200,
-    '30f. Admin diagnostic endpoint succeeds with authenticated admin session (200 OK)');
+    '30c. Admin diagnostic endpoint succeeds with authenticated admin session (200 OK)');
 
-  // 30g: Public Health check is unauthenticated and safe
+  // 30d: Public diagnostic route is eliminated from public application
+  const repoRootPath = path.resolve(__dirname, '../../../../');
+  const publicDiagExists = fs.existsSync(path.join(repoRootPath, 'apps/public/src/app/api/diagnostic'));
+  assertEqual(publicDiagExists, false,
+    '30d. Redundant public diagnostic route completely removed to prevent cross-origin cookie mismatch');
+
+  // 30e: Public Health check is unauthenticated and safe
   const publicHealthReq = new Request('http://localhost:3010/api/health') as any;
   const publicHealthRes = await healthHandler(publicHealthReq);
   assertEqual(publicHealthRes.status, 200,
-    '30g. Public /api/health endpoint is accessible without authentication (200 OK)');
+    '30e. Public /api/health endpoint is accessible without authentication (200 OK)');
   const healthJson = await publicHealthRes.json();
-  assertEqual(healthJson.healthy, true, '30h. Health check returns healthy: true');
+  assertEqual(healthJson.healthy, true, '30f. Health check returns healthy: true');
   assert(!JSON.stringify(healthJson).includes('supabase') && !JSON.stringify(healthJson).includes('/home/'),
-    '30i. Health check leaks zero internal environment or paths');
+    '30g. Health check leaks zero internal environment or paths');
 
   // -------------------------------------------------------------
   // Test 31: Open redirect protection in login flow
@@ -708,6 +691,22 @@ async function runSecurityTests() {
   const badMimeRes = await uploadHandler(badMimeReq);
   assertEqual(badMimeRes.status, 400, '36e. Upload with disallowed MIME type rejected with 400 Bad Request');
 
+  // 36e2: SVG upload explicitly rejected (400) to prevent SVG XSS vectors
+  const svgForm = new FormData();
+  svgForm.append('bucket', 'quiz-covers');
+  svgForm.append('file', new File(['<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'], 'xss.svg', { type: 'image/svg+xml' }));
+  const svgReq = new Request('http://localhost:3011/api/upload', {
+    method: 'POST',
+    headers: {
+      origin: 'http://localhost:3011',
+      host: 'localhost:3011',
+      cookie: `${ADMIN_ACCESS_COOKIE}=test-admin-token`
+    },
+    body: svgForm
+  }) as any;
+  const svgRes = await uploadHandler(svgReq);
+  assertEqual(svgRes.status, 400, '36e2. SVG upload explicitly rejected (400 Bad Request) to prevent XSS');
+
   // 36f: Oversized file (>5MB) rejected (400)
   const oversizedForm = new FormData();
   oversizedForm.append('bucket', 'quiz-covers');
@@ -750,33 +749,39 @@ async function runSecurityTests() {
   const repoRoot = path.resolve(__dirname, '../../../../');
   const schemaSql = fs.readFileSync(path.join(repoRoot, 'supabase/schema.sql'), 'utf8');
   const migrationSql = fs.readFileSync(path.join(repoRoot, 'supabase/migrations/20260909000004_fortify_rls_and_storage.sql'), 'utf8');
+  const closureSql = fs.readFileSync(path.join(repoRoot, 'supabase/migrations/20260910000005_admin_users_and_rls_closure.sql'), 'utf8');
 
   // 37a: Questions column-level security revoking accepted_answers
   assert(schemaSql.includes('REVOKE SELECT ON public.questions FROM anon, authenticated;') &&
          migrationSql.includes('REVOKE SELECT ON public.questions FROM anon, authenticated;') &&
-         !migrationSql.includes('accepted_answers,'),
+         closureSql.includes('REVOKE SELECT ON public.questions FROM anon, authenticated;') &&
+         !closureSql.includes('accepted_answers,'),
     '37a. Column-level security revokes SELECT on questions(accepted_answers) from anon and authenticated');
 
   // 37b: Options column-level security revoking is_correct
   assert(schemaSql.includes('REVOKE SELECT ON public.options FROM anon, authenticated;') &&
          migrationSql.includes('REVOKE SELECT ON public.options FROM anon, authenticated;') &&
-         !migrationSql.includes('is_correct,'),
+         closureSql.includes('REVOKE SELECT ON public.options FROM anon, authenticated;') &&
+         !closureSql.includes('is_correct,'),
     '37b. Column-level security revokes SELECT on options(is_correct) from anon and authenticated');
 
   // 37c: Quiz attempts direct anon insert policy dropped
-  assert(migrationSql.includes('DROP POLICY IF EXISTS "Public can insert attempts" ON public.quiz_attempts;'),
+  assert(migrationSql.includes('DROP POLICY IF EXISTS "Public can insert attempts" ON public.quiz_attempts;') &&
+         closureSql.includes('DROP POLICY IF EXISTS "Public can insert attempts" ON public.quiz_attempts;'),
     '37c. Migration drops direct anonymous quiz attempt insert policy from Postgres');
 
   // 37d: Submissions direct anon insert policy dropped
-  assert(migrationSql.includes('DROP POLICY IF EXISTS "Public can insert submissions" ON public.submissions;'),
+  assert(migrationSql.includes('DROP POLICY IF EXISTS "Public can insert submissions" ON public.submissions;') &&
+         closureSql.includes('DROP POLICY IF EXISTS "Public can insert submissions" ON public.submissions;'),
     '37d. Migration drops direct anonymous submission insert policy from Postgres');
 
   // 37e: Answers direct anon insert policy dropped
-  assert(migrationSql.includes('DROP POLICY IF EXISTS "Public can insert answers" ON public.answers;'),
+  assert(migrationSql.includes('DROP POLICY IF EXISTS "Public can insert answers" ON public.answers;') &&
+         closureSql.includes('DROP POLICY IF EXISTS "Public can insert answers" ON public.answers;'),
     '37e. Migration drops direct anonymous answer insert policy from Postgres');
 
   // 37f: Storage write access restricted to service_role
-  assert(schemaSql.includes('TO service_role') && migrationSql.includes('TO service_role'),
+  assert(schemaSql.includes('TO service_role') && migrationSql.includes('TO service_role') && closureSql.includes('TO service_role'),
     '37f. Storage policies restrict insert, update, and delete exclusively to service_role');
 
   // 37g: Public projection getPublishedQuizBySlug strictly omits accepted_answers
@@ -787,6 +792,11 @@ async function runSecurityTests() {
   // 37h: Public projection getPublishedQuizBySlug strictly omits is_correct
   const optWithCorrect = publishedQuizCheck?.questions.flatMap((q: any) => q.options || []).some((o: any) => 'is_correct' in o);
   assertEqual(optWithCorrect, false, '37h. Public projection getPublishedQuizBySlug strictly omits is_correct');
+
+  // 37i: Admin users table creation present in schema and closure migration
+  assert(schemaSql.includes('CREATE TABLE IF NOT EXISTS public.admin_users') &&
+         closureSql.includes('CREATE TABLE IF NOT EXISTS public.admin_users'),
+    '37i. Admin users allowlist table schema and closure migration verified');
 
   // -------------------------------------------------------------
   // Test 38: Resource Abuse & Input Boundary Defense

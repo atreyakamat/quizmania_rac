@@ -72,7 +72,7 @@ export interface AdminUserRecord {
   updated_at?: string;
 }
 
-export const defaultMockAdminUsers: AdminUserRecord[] = [
+export const defaultMockAdminUsers: AdminUserRecord[] = typeof window === 'undefined' ? [
   {
     id: '00000000-0000-4000-a000-000000000001',
     user_id: '00000000-0000-4000-a000-000000000001',
@@ -97,7 +97,7 @@ export const defaultMockAdminUsers: AdminUserRecord[] = [
     enabled: true,
     created_at: new Date().toISOString()
   }
-];
+] : [];
 
 const STORE_FILE = '/tmp/quizmania-local-store.json';
 

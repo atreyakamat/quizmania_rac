@@ -68,7 +68,7 @@ export function ImageUploader({ bucket, currentUrl, onUploaded, label = 'Upload 
             <span>{isUploading ? 'Uploading...' : 'Choose File'}</span>
             <input
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,image/gif"
               className="hidden"
               onChange={handleFileChange}
               disabled={isUploading}

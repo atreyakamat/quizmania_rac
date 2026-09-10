@@ -11,8 +11,7 @@ const ALLOWED_MIME_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
-  'image/gif': 'gif',
-  'image/svg+xml': 'svg'
+  'image/gif': 'gif'
 };
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -78,7 +77,7 @@ export async function POST(request: NextRequest) {
     const expectedExt = ALLOWED_MIME_TYPES[mimeType];
     if (!expectedExt) {
       return NextResponse.json(
-        { success: false, error: `Disallowed file type: "${mimeType}". Only JPG, PNG, WebP, GIF, and SVG images are allowed.` },
+        { success: false, error: `Disallowed file type: "${mimeType}". Only JPG, PNG, WebP, and GIF images are allowed. SVG and executable files are strictly prohibited.` },
         { status: 400 }
       );
     }

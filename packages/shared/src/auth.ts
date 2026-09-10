@@ -273,13 +273,9 @@ export async function requireAuthenticatedAdmin(request: Request): Promise<Requi
     };
   }
 
-  // 3. Automated Test Runner & Local Dev Handling (ONLY active in non-production environments)
-  const isDevOrTest = process.env.NODE_ENV !== 'production' && (
-    process.env.NODE_ENV === 'test' ||
-    process.env.NODE_ENV === 'development' ||
-    process.env.ENABLE_TEST_AUTH === 'true'
-  );
-  if (isDevOrTest) {
+  // 3. Automated Test Runner Handling (STRICTLY isolated to automated test runner; NEVER in production or runtime server)
+  const isTestEnvironment = process.env.NODE_ENV === 'test';
+  if (isTestEnvironment) {
     if (accessToken === 'test-admin-token') {
       const authCheck = await verifyAdminAuthorization('00000000-0000-4000-a000-000000000001', 'admin@quizmania.dev');
       if (!authCheck.authorized) {
