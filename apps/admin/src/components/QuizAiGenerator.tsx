@@ -53,8 +53,8 @@ function processNdjsonLine(
   return null;
 }
 
-function processNdjsonLines(lines: string[], onProgress: (msg: string) => void): any | null {
-  let completed: any = null;
+function processNdjsonLines(lines: string[], onProgress: (msg: string) => void): Record<string, unknown> | null {
+  let completed: Record<string, unknown> | null = null;
   for (const line of lines) {
     try {
       const res = processNdjsonLine(line, onProgress);

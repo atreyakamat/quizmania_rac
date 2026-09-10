@@ -670,6 +670,103 @@ export async function runJsonImportTests() {
   const resInvalid = convertQuizJsonToQuiz({ not_a_valid_quiz: true });
   assert(!resInvalid.success && Array.isArray(resInvalid.errors), 'Test 21: invalid input produces structured errors');
 
+  // ------------------------------------------------------------------------
+  // Test 22: Question Validation Edge Cases
+  // ------------------------------------------------------------------------
+  console.log('Scenario 22: Question validation edge cases');
+  // 22a. single_choice with < 2 options
+  const valSingleFew = validateQuizJson({
+    title: 'Few Options',
+    questions: [{ question: 'Q?', type: 'single_choice', options: [{ text: '1', correct: true }] }]
+  });
+  assert(!valSingleFew.success && valSingleFew.errors?.some(e => e.includes('at least 2 options')), 'Test 22a: single_choice < 2 options rejected');
+
+  // 22b. multiple_choice with < 2 options
+  const valMultiFew = validateQuizJson({
+    title: 'Few Options Multi',
+    questions: [{ question: 'Q?', type: 'multiple_choice', options: [{ text: '1', correct: true }] }]
+  });
+  assert(!valMultiFew.success && valMultiFew.errors?.some(e => e.includes('at least 2 options')), 'Test 22b: multiple_choice < 2 options rejected');
+
+  // 22c. multiple_choice with 0 correct options
+  const valMultiNoCorrect = validateQuizJson({
+    title: 'No Correct Multi',
+    questions: [{ question: 'Q?', type: 'multiple_choice', options: [{ text: '1' }, { text: '2' }] }]
+  });
+  assert(!valMultiNoCorrect.success && valMultiNoCorrect.errors?.some(e => e.includes('at least one correct option')), 'Test 22c: multiple_choice 0 correct rejected');
+
+  // 22d. true_false with != 2 options
+  const valTfWrongCount = validateQuizJson({
+    title: 'TF Wrong Count',
+    questions: [{ question: 'Q?', type: 'true_false', options: [{ text: 'True', correct: true }, { text: 'False' }, { text: 'Maybe' }] }]
+  });
+  assert(!valTfWrongCount.success && valTfWrongCount.errors?.some(e => e.includes('exactly 2 options')), 'Test 22d: true_false with 3 options rejected');
+
+  // 22e. true_false with 0 or 2 correct options
+  const valTfTwoCorrect = validateQuizJson({
+    title: 'TF 2 Correct',
+    questions: [{ question: 'Q?', type: 'true_false', options: [{ text: 'True', correct: true }, { text: 'False', correct: true }] }]
+  });
+  assert(!valTfTwoCorrect.success && valTfTwoCorrect.errors?.some(e => e.includes('exactly one correct option')), 'Test 22e: true_false with 2 correct rejected');
+
+  // 22f. short_text with no accepted answers when marks > 0
+  const valShortNoAnswers = validateQuizJson({
+    title: 'Short No Answers',
+    questions: [{ question: 'Q?', type: 'short_text', marks: 5 }]
+  });
+  assert(!valShortNoAnswers.success && valShortNoAnswers.errors?.some(e => e.includes('at least one accepted answer')), 'Test 22f: short_text with no accepted answers rejected');
+
+  // ------------------------------------------------------------------------
+  // Test 23: Question Type Aliases & Accepted Answers Mapping
+  // ------------------------------------------------------------------------
+  console.log('Scenario 23: Question type aliases & options mapping');
+  const jsonAliases = JSON.stringify({
+    title: 'Aliases Quiz',
+    questions: [
+      {
+        question: 'Short answer alias',
+        type: 'short_answer',
+        acceptedAnswers: ['answer1', 'answer2']
+      },
+      {
+        question: 'Text answer alias',
+        type: 'text_answer',
+        options: [{ text: 'from_option', is_correct: true }]
+      },
+      {
+        id: '11111111-1111-4111-a111-111111111111',
+        question: 'Canonical ID preservation',
+        type: 'single_choice',
+        options: [
+          { id: '22222222-2222-4222-a222-222222222222', text: 'Opt1', correct: true },
+          { id: '33333333-3333-4333-a333-333333333333', text: 'Opt2' }
+        ]
+      }
+    ]
+  });
+  const resAliases = convertQuizJsonToQuiz(jsonAliases);
+  assert(resAliases.success, 'Test 23a: convert aliases succeeds');
+  assertEqual(resAliases.quiz?.questions[0].question_type, 'short_text', 'Test 23b: short_answer mapped to short_text');
+  assertEqual(resAliases.quiz?.questions[0].accepted_answers?.[0], 'answer1', 'Test 23c: acceptedAnswers mapped');
+  assertEqual(resAliases.quiz?.questions[1].question_type, 'short_text', 'Test 23d: text_answer mapped to short_text');
+  assertEqual(resAliases.quiz?.questions[1].accepted_answers?.[0], 'from_option', 'Test 23e: options accepted answers mapped');
+  assertEqual(resAliases.quiz?.questions[2].id, '11111111-1111-4111-a111-111111111111', 'Test 23f: question UUID preserved');
+  assertEqual(resAliases.quiz?.questions[2].options[0].id, '22222222-2222-4222-a222-222222222222', 'Test 23g: option UUID preserved');
+
+  // ------------------------------------------------------------------------
+  // Test 24: Crypto Fallback Branches
+  // ------------------------------------------------------------------------
+  console.log('Scenario 24: Crypto fallback branches');
+  const origRandomUUID = globalThis.crypto.randomUUID;
+  try {
+    // Stub randomUUID to undefined so it uses getRandomValues branch
+    (globalThis.crypto as any).randomUUID = undefined;
+    const fallbackUuid = generateCanonicalUuid();
+    assert(isCanonicalUuid(fallbackUuid), 'Test 24a: getRandomValues fallback generates canonical UUID');
+  } finally {
+    globalThis.crypto.randomUUID = origRandomUUID;
+  }
+
   console.log('\n----------------------------------------');
   console.log(`Results: ${passed} passed, ${failed} failed`);
   console.log('----------------------------------------\n');
