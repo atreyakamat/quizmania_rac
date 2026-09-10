@@ -503,6 +503,104 @@ export const quizSubmissionSchema = z.object({
 /**
  * JSON validation helper with formatted human-readable errors
  */
+function validateOptionIds(options: any[], qNum: number, errors: string[]): void {
+  if (!Array.isArray(options)) return;
+  const seenIds = new Set<string>();
+  options.forEach((opt: any) => {
+    if (opt && (opt.id !== undefined && opt.id !== null)) {
+      const idStr = String(opt.id);
+      if (seenIds.has(idStr)) {
+        errors.push(`Question ${qNum}: Duplicate option ID "${idStr}" found.`);
+      }
+      seenIds.add(idStr);
+    }
+  });
+}
+
+function validateQuestionSpecificType(q: any, normalizedType: string, qNum: number, errors: string[]): void {
+  if (normalizedType === 'single_choice') {
+    if (!Array.isArray(q.options) || q.options.length < 2) {
+      errors.push(`Question ${qNum}: single_choice questions must have at least 2 options.`);
+    } else {
+      const correctCount = q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).length;
+      if (correctCount === 0) {
+        errors.push(`Question ${qNum}: single_choice questions must have exactly one correct option (none found).`);
+      } else if (correctCount > 1) {
+        errors.push(`Question ${qNum}: single_choice questions must have exactly one correct option (${correctCount} found).`);
+      }
+    }
+  } else if (normalizedType === 'multiple_choice') {
+    if (!Array.isArray(q.options) || q.options.length < 2) {
+      errors.push(`Question ${qNum}: multiple_choice questions must have at least 2 options.`);
+    } else {
+      const correctCount = q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).length;
+      if (correctCount === 0) {
+        errors.push(`Question ${qNum}: multiple_choice questions must have at least one correct option.`);
+      }
+    }
+  } else if (normalizedType === 'true_false') {
+    if (Array.isArray(q.options)) {
+      if (q.options.length !== 2) {
+        errors.push(`Question ${qNum}: true_false questions must have exactly 2 options (True and False).`);
+      } else {
+        const correctCount = q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).length;
+        if (correctCount !== 1) {
+          errors.push(`Question ${qNum}: true_false questions must have exactly one correct option.`);
+        }
+      }
+    }
+  } else if (normalizedType === 'short_text') {
+    const marksVal = Number(q.marks ?? 1);
+    if (marksVal > 0) {
+      const accepted = q.acceptedAnswers ?? q.accepted_answers ?? (
+        Array.isArray(q.options)
+          ? q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).map((o: any) => o?.text ?? o?.option_text)
+          : []
+      );
+      if (!Array.isArray(accepted) || accepted.length === 0 || accepted.every((a: any) => !String(a).trim())) {
+        errors.push(`Question ${qNum}: short_text questions must have at least one accepted answer.`);
+      }
+    }
+  }
+}
+
+function validateSingleQuizQuestion(q: any, idx: number, errors: string[]): void {
+  const qNum = idx + 1;
+  if (!q || typeof q !== 'object') {
+    errors.push(`Question ${qNum}: Invalid question format.`);
+    return;
+  }
+
+  const qText = q.question ?? q.question_text;
+  if (!qText || typeof qText !== 'string' || !qText.trim()) {
+    errors.push(`Question ${qNum}: Question text is required.`);
+  }
+
+  const rawType = q.type ?? q.question_type ?? 'single_choice';
+  const validTypes = [
+    'single_choice',
+    'multiple_choice',
+    'true_false',
+    'short_text',
+    'short_answer',
+    'text_answer',
+    'paragraph'
+  ];
+  if (!validTypes.includes(rawType)) {
+    errors.push(
+      `Question ${qNum}: Unsupported question type "${rawType}". Supported types are: single_choice, multiple_choice, true_false, short_text, paragraph.`
+    );
+    return;
+  }
+
+  const normalizedType = (rawType === 'short_answer' || rawType === 'text_answer') ? 'short_text' : rawType;
+  validateOptionIds(q.options, qNum, errors);
+  validateQuestionSpecificType(q, normalizedType, qNum, errors);
+}
+
+/**
+ * JSON validation helper with formatted human-readable errors
+ */
 export function validateQuizJson(input: string | unknown): {
   success: boolean;
   data?: QuizJsonImportFormat;
@@ -548,99 +646,7 @@ export function validateQuizJson(input: string | unknown): {
     } else {
       // 3. Detailed per-question validation
       rawObj.questions.forEach((q: any, idx: number) => {
-        const qNum = idx + 1;
-        if (!q || typeof q !== 'object') {
-          errors.push(`Question ${qNum}: Invalid question format.`);
-          return;
-        }
-
-        // Question text
-        const qText = q.question ?? q.question_text;
-        if (!qText || typeof qText !== 'string' || !qText.trim()) {
-          errors.push(`Question ${qNum}: Question text is required.`);
-        }
-
-        // Question type
-        const rawType = q.type ?? q.question_type ?? 'single_choice';
-        const validTypes = [
-          'single_choice',
-          'multiple_choice',
-          'true_false',
-          'short_text',
-          'short_answer',
-          'text_answer',
-          'paragraph'
-        ];
-        if (!validTypes.includes(rawType)) {
-          errors.push(
-            `Question ${qNum}: Unsupported question type "${rawType}". Supported types are: single_choice, multiple_choice, true_false, short_text, paragraph.`
-          );
-          return;
-        }
-
-        const normalizedType = (rawType === 'short_answer' || rawType === 'text_answer') ? 'short_text' : rawType;
-
-        // Check duplicate option IDs
-        if (Array.isArray(q.options)) {
-          const seenIds = new Set<string>();
-          q.options.forEach((opt: any) => {
-            if (opt && (opt.id !== undefined && opt.id !== null)) {
-              const idStr = String(opt.id);
-              if (seenIds.has(idStr)) {
-                errors.push(`Question ${qNum}: Duplicate option ID "${idStr}" found.`);
-              }
-              seenIds.add(idStr);
-            }
-          });
-        }
-
-        // Specific Type Validations
-        if (normalizedType === 'single_choice') {
-          if (!Array.isArray(q.options) || q.options.length < 2) {
-            errors.push(`Question ${qNum}: single_choice questions must have at least 2 options.`);
-          } else {
-            const correctCount = q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).length;
-            if (correctCount === 0) {
-              errors.push(`Question ${qNum}: single_choice questions must have exactly one correct option (none found).`);
-            } else if (correctCount > 1) {
-              errors.push(`Question ${qNum}: single_choice questions must have exactly one correct option (${correctCount} found).`);
-            }
-          }
-        } else if (normalizedType === 'multiple_choice') {
-          if (!Array.isArray(q.options) || q.options.length < 2) {
-            errors.push(`Question ${qNum}: multiple_choice questions must have at least 2 options.`);
-          } else {
-            const correctCount = q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).length;
-            if (correctCount === 0) {
-              errors.push(`Question ${qNum}: multiple_choice questions must have at least one correct option.`);
-            }
-          }
-        } else if (normalizedType === 'true_false') {
-          if (Array.isArray(q.options)) {
-            if (q.options.length !== 2) {
-              errors.push(`Question ${qNum}: true_false questions must have exactly 2 options (True and False).`);
-            } else {
-              const correctCount = q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).length;
-              if (correctCount !== 1) {
-                errors.push(`Question ${qNum}: true_false questions must have exactly one correct option.`);
-              }
-            }
-          }
-        } else if (normalizedType === 'short_text') {
-          const marksVal = Number(q.marks ?? 1);
-          // Graded short_text questions (marks > 0) require at least one accepted answer.
-          // Ungraded / survey / registration fields (marks === 0) do not require accepted answers.
-          if (marksVal > 0) {
-            const accepted = q.acceptedAnswers ?? q.accepted_answers ?? (
-              Array.isArray(q.options)
-                ? q.options.filter((o: any) => Boolean(o?.correct ?? o?.is_correct)).map((o: any) => o?.text ?? o?.option_text)
-                : []
-            );
-            if (!Array.isArray(accepted) || accepted.length === 0 || accepted.every((a: any) => !String(a).trim())) {
-              errors.push(`Question ${qNum}: short_text questions must have at least one accepted answer.`);
-            }
-          }
-        }
+        validateSingleQuizQuestion(q, idx, errors);
       });
     }
 
@@ -794,32 +800,10 @@ export function isCanonicalUuid(id?: string | null): boolean {
 /**
  * Validates and converts JSON import data directly into QuizMania's internal Quiz model
  */
-export function convertQuizJsonToQuiz(
-  input: string | unknown,
-  existingQuizId?: string
-): {
-  success: boolean;
-  quiz?: Quiz;
-  summary?: ImportSummary;
-  errors?: string[];
+function parseQuizSections(data: QuizJsonImportFormat, quizId: string): {
+  sections: QuizSection[];
+  questionToSectionTitle: Map<string, string>;
 } {
-  const validation = validateQuizJson(input);
-  if (!validation.success || !validation.data) {
-    return {
-      success: false,
-      errors: validation.errors || ['Validation failed']
-    };
-  }
-
-  const data = validation.data;
-  const quizId = (existingQuizId && isCanonicalUuid(existingQuizId))
-    ? existingQuizId
-    : (data.id && isCanonicalUuid(String(data.id)))
-      ? String(data.id)
-      : generateCanonicalUuid();
-  const slug = data.slug?.trim() ? generateSlug(data.slug) : generateSlug(data.title);
-
-  // Parse Sections if any
   const questionToSectionTitle = new Map<string, string>();
   const sections: QuizSection[] = [];
   if (Array.isArray(data.sections)) {
@@ -840,8 +824,14 @@ export function convertQuizJsonToQuiz(
       }
     });
   }
+  return { sections, questionToSectionTitle };
+}
 
-  // Parse Settings
+function parseQuizSettings(data: QuizJsonImportFormat): {
+  settings: QuizSettings;
+  rawStartAt: string | null;
+  rawEndAt: string | null;
+} {
   const rawSettings = (data.settings || {}) as Record<string, any>;
   const rawScheduleEnabled = data.schedule_enabled ?? rawSettings.schedule_enabled ?? rawSettings.scheduleEnabled;
   const rawStartAt = data.start_at ?? data.startAt ?? rawSettings.start_at ?? rawSettings.startAt ?? null;
@@ -873,88 +863,136 @@ export function convertQuizJsonToQuiz(
       shuffleOptions: rawSettings.shuffleOptions ?? rawSettings.shuffle_options ?? false
     }
   };
+  return { settings, rawStartAt, rawEndAt };
+}
 
-  let totalOptionsCount = 0;
-
-  // Parse Questions
-  const questions: Question[] = (data.questions || []).map((q: any, qIdx: number) => {
-    const qNumber = qIdx + 1;
-    const questionId = (q.id && isCanonicalUuid(String(q.id))) ? String(q.id) : generateCanonicalUuid();
-    const logicalId = q.id !== undefined && q.id !== null ? String(q.id) : String(qNumber);
-    const assignedSectionTitle = q.section_title || questionToSectionTitle.get(logicalId) || null;
-
-    let qType = q.type || q.question_type || 'single_choice';
-    if (qType === 'short_answer' || qType === 'text_answer') {
-      qType = 'short_text';
-    }
-
-    let questionOptions: Option[] = [];
-
-    if (qType === 'true_false') {
-      if (Array.isArray(q.options) && q.options.length === 2) {
-        questionOptions = q.options.map((opt: any, optIdx: number) => ({
-          id: (opt.id && isCanonicalUuid(String(opt.id))) ? String(opt.id) : generateCanonicalUuid(),
-          question_id: questionId,
-          option_text: opt.text ?? opt.option_text ?? (optIdx === 0 ? 'True' : 'False'),
-          option_image: opt.image ?? opt.option_image ?? null,
-          is_correct: Boolean(opt.correct ?? opt.is_correct),
-          option_order: optIdx + 1
-        }));
-      } else {
-        questionOptions = [
-          { id: generateCanonicalUuid(), question_id: questionId, option_text: 'True', option_image: null, is_correct: true, option_order: 1 },
-          { id: generateCanonicalUuid(), question_id: questionId, option_text: 'False', option_image: null, is_correct: false, option_order: 2 }
-        ];
-      }
-    } else if (qType === 'single_choice' || qType === 'multiple_choice') {
-      questionOptions = (q.options || []).map((opt: any, optIdx: number) => ({
+function buildQuestionOptions(q: any, qType: string, questionId: string): Option[] {
+  if (qType === 'true_false') {
+    if (Array.isArray(q.options) && q.options.length === 2) {
+      return q.options.map((opt: any, optIdx: number) => ({
         id: (opt.id && isCanonicalUuid(String(opt.id))) ? String(opt.id) : generateCanonicalUuid(),
         question_id: questionId,
-        option_text: opt.text ?? opt.option_text ?? '',
+        option_text: opt.text ?? opt.option_text ?? (optIdx === 0 ? 'True' : 'False'),
         option_image: opt.image ?? opt.option_image ?? null,
         is_correct: Boolean(opt.correct ?? opt.is_correct),
         option_order: optIdx + 1
       }));
     }
+    return [
+      { id: generateCanonicalUuid(), question_id: questionId, option_text: 'True', option_image: null, is_correct: true, option_order: 1 },
+      { id: generateCanonicalUuid(), question_id: questionId, option_text: 'False', option_image: null, is_correct: false, option_order: 2 }
+    ];
+  }
+  if (qType === 'single_choice' || qType === 'multiple_choice') {
+    return (q.options || []).map((opt: any, optIdx: number) => ({
+      id: (opt.id && isCanonicalUuid(String(opt.id))) ? String(opt.id) : generateCanonicalUuid(),
+      question_id: questionId,
+      option_text: opt.text ?? opt.option_text ?? '',
+      option_image: opt.image ?? opt.option_image ?? null,
+      is_correct: Boolean(opt.correct ?? opt.is_correct),
+      option_order: optIdx + 1
+    }));
+  }
+  return [];
+}
 
-    totalOptionsCount += questionOptions.length;
+function buildQuestionAcceptedAnswers(q: any, qType: string): string[] {
+  if (qType !== 'short_text') return [];
+  let rawAccepted: any[] = [];
+  if (Array.isArray(q.accepted_answers) && q.accepted_answers.length > 0) {
+    rawAccepted = q.accepted_answers;
+  } else if (Array.isArray(q.acceptedAnswers) && q.acceptedAnswers.length > 0) {
+    rawAccepted = q.acceptedAnswers;
+  } else if (Array.isArray(q.options) && q.options.length > 0) {
+    rawAccepted = q.options.filter((o: any) => Boolean(o.correct ?? o.is_correct)).map((o: any) => o.text ?? o.option_text).filter(Boolean);
+  }
+  return rawAccepted.map(a => String(a).trim()).filter(Boolean);
+}
 
-    // Accepted answers for short_text
-    let acceptedAnswers: string[] = [];
-    if (qType === 'short_text') {
-      let rawAccepted: any[] = [];
-      if (Array.isArray(q.accepted_answers) && q.accepted_answers.length > 0) {
-        rawAccepted = q.accepted_answers;
-      } else if (Array.isArray(q.acceptedAnswers) && q.acceptedAnswers.length > 0) {
-        rawAccepted = q.acceptedAnswers;
-      } else if (Array.isArray(q.options) && q.options.length > 0) {
-        rawAccepted = q.options.filter((o: any) => Boolean(o.correct ?? o.is_correct)).map((o: any) => o.text ?? o.option_text).filter(Boolean);
-      }
-      acceptedAnswers = rawAccepted.map(a => String(a).trim()).filter(Boolean);
-    }
+function convertJsonQuestionToInternal(
+  q: any,
+  qIdx: number,
+  quizId: string,
+  questionToSectionTitle: Map<string, string>
+): { question: Question; optionCount: number } {
+  const qNumber = qIdx + 1;
+  const questionId = (q.id && isCanonicalUuid(String(q.id))) ? String(q.id) : generateCanonicalUuid();
+  const logicalId = q.id !== undefined && q.id !== null ? String(q.id) : String(qNumber);
+  const assignedSectionTitle = q.section_title || questionToSectionTitle.get(logicalId) || null;
 
+  let qType = q.type || q.question_type || 'single_choice';
+  if (qType === 'short_answer' || qType === 'text_answer') {
+    qType = 'short_text';
+  }
+
+  const questionOptions = buildQuestionOptions(q, qType, questionId);
+  const acceptedAnswers = buildQuestionAcceptedAnswers(q, qType);
+
+  const question: Question = {
+    id: questionId,
+    quiz_id: quizId,
+    question_text: q.question || q.question_text || '',
+    question_description: q.description || q.explanation || q.question_description || null,
+    question_type: qType as QuestionType,
+    question_image: q.image || q.question_image || null,
+    marks: typeof q.marks === 'number' && q.marks >= 0 ? q.marks : 1,
+    negative_marks: typeof (q.negative_marks ?? q.negativeMarks) === 'number' ? (q.negative_marks ?? q.negativeMarks) : 0,
+    required: q.required !== false,
+    question_order: qNumber,
+    section_title: assignedSectionTitle,
+    section_description: q.section_description || null,
+    time_limit_seconds: q.time_limit_seconds ?? q.timeLimitSeconds ?? null,
+    scoring_method: q.scoring_method ?? q.scoringMethod ?? (qType === 'multiple_choice' ? 'all_or_nothing' : undefined),
+    accepted_answers: acceptedAnswers,
+    case_sensitive: Boolean(q.case_sensitive ?? q.caseSensitive),
+    trim_whitespace: q.trim_whitespace ?? q.trimWhitespace ?? true,
+    normalize_spaces: q.normalize_spaces ?? q.normalizeSpaces ?? true,
+    options: questionOptions
+  };
+
+  return { question, optionCount: questionOptions.length };
+}
+
+/**
+ * Validates and converts JSON import data directly into QuizMania's internal Quiz model
+ */
+export function convertQuizJsonToQuiz(
+  input: string | unknown,
+  existingQuizId?: string
+): {
+  success: boolean;
+  quiz?: Quiz;
+  summary?: ImportSummary;
+  errors?: string[];
+} {
+  const validation = validateQuizJson(input);
+  if (!validation.success || !validation.data) {
     return {
-      id: questionId,
-      quiz_id: quizId,
-      question_text: q.question || q.question_text || '',
-      question_description: q.description || q.explanation || q.question_description || null,
-      question_type: qType as QuestionType,
-      question_image: q.image || q.question_image || null,
-      marks: typeof q.marks === 'number' && q.marks >= 0 ? q.marks : 1,
-      negative_marks: typeof (q.negative_marks ?? q.negativeMarks) === 'number' ? (q.negative_marks ?? q.negativeMarks) : 0,
-      required: q.required !== false,
-      question_order: qNumber,
-      section_title: assignedSectionTitle,
-      section_description: q.section_description || null,
-      time_limit_seconds: q.time_limit_seconds ?? q.timeLimitSeconds ?? null,
-      scoring_method: q.scoring_method ?? q.scoringMethod ?? (qType === 'multiple_choice' ? 'all_or_nothing' : undefined),
-      accepted_answers: acceptedAnswers,
-      case_sensitive: Boolean(q.case_sensitive ?? q.caseSensitive),
-      trim_whitespace: q.trim_whitespace ?? q.trimWhitespace ?? true,
-      normalize_spaces: q.normalize_spaces ?? q.normalizeSpaces ?? true,
-      options: questionOptions
+      success: false,
+      errors: validation.errors || ['Validation failed']
     };
-  });
+  }
+
+  const data = validation.data;
+  const quizId = (existingQuizId && isCanonicalUuid(existingQuizId))
+    ? existingQuizId
+    : (data.id && isCanonicalUuid(String(data.id)))
+      ? String(data.id)
+      : generateCanonicalUuid();
+  const slug = data.slug?.trim() ? generateSlug(data.slug) : generateSlug(data.title);
+
+  const { sections, questionToSectionTitle } = parseQuizSections(data, quizId);
+  const { settings, rawStartAt, rawEndAt } = parseQuizSettings(data);
+
+  let totalOptionsCount = 0;
+  const questions: Question[] = [];
+
+  for (let idx = 0; idx < (data.questions || []).length; idx++) {
+    const rawQ = data.questions[idx];
+    const { question, optionCount } = convertJsonQuestionToInternal(rawQ, idx, quizId, questionToSectionTitle);
+    questions.push(question);
+    totalOptionsCount += optionCount;
+  }
 
   const quiz: Quiz = {
     id: quizId,

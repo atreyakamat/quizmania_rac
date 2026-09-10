@@ -27,6 +27,17 @@ export function getChunkMaxChars(): number {
   return DEFAULT_CHUNK_MAX_CHARS;
 }
 
+function findLastRegexBoundary(regex: RegExp, slice: string, maxChars: number): number {
+  let match: RegExpExecArray | null;
+  let lastBoundary = -1;
+  while ((match = regex.exec(slice)) !== null) {
+    if (match.index > 0 && match.index < maxChars) {
+      lastBoundary = match.index;
+    }
+  }
+  return lastBoundary;
+}
+
 /**
  * Searches for the nearest safe question boundary strictly before maxChars.
  * Returns the character index within slice where the next chunk should start.
@@ -36,49 +47,32 @@ export function findSafeQuestionBoundary(slice: string, maxChars: number): numbe
     return slice.length;
   }
 
+  const minAcceptableBoundary = Math.min(100, Math.floor(maxChars * 0.1));
+
   // 1. Primary: Question boundary preceded by newline(s)
-  // Matches: \n1. , \n2) , \nQuestion 3:, \nQ4., \n### 5., etc.
-  const questionBoundaryRegex = /\n+(?=(?:---\s*\n+)?(?:\*\*)?(?:###\s*)?(?:Question\s*\d+|Q\d+[\.:\s]|\d+[\.\)])\s+)/gi;
-  let match: RegExpExecArray | null;
-  let lastQuestionBoundary = -1;
-
-  while ((match = questionBoundaryRegex.exec(slice)) !== null) {
-    if (match.index > 0 && match.index < maxChars) {
-      lastQuestionBoundary = match.index;
-    }
-  }
-
-  // If a safe question boundary exists reasonably into the chunk (>= 10% of maxChars), use it
-  if (lastQuestionBoundary >= Math.min(100, Math.floor(maxChars * 0.1))) {
-    return lastQuestionBoundary;
+  const questionBoundary = findLastRegexBoundary(
+    /\n+(?=(?:---\s*\n+)?(?:\*\*)?(?:###\s*)?(?:Question\s*\d+|Q\d+[\.:\s]|\d+[\.\)])\s+)/gi,
+    slice,
+    maxChars
+  );
+  if (questionBoundary >= minAcceptableBoundary) {
+    return questionBoundary;
   }
 
   // 2. Secondary fallback: Blank line boundary (double newline)
-  const paragraphRegex = /\n\s*\n+/g;
-  let lastParagraphBoundary = -1;
-
-  while ((match = paragraphRegex.exec(slice)) !== null) {
-    if (match.index > 0 && match.index < maxChars) {
-      lastParagraphBoundary = match.index;
-    }
-  }
-
-  if (lastParagraphBoundary >= Math.min(100, Math.floor(maxChars * 0.1))) {
-    return lastParagraphBoundary;
+  const paragraphBoundary = findLastRegexBoundary(/\n\s*\n+/g, slice, maxChars);
+  if (paragraphBoundary >= minAcceptableBoundary) {
+    return paragraphBoundary;
   }
 
   // 3. Tertiary fallback: Newline that does not split inside option lists or Answer lines
-  const safeNewlineRegex = /\n(?!\s*(?:[A-Za-z0-9][\.\)]|(?:Correct\s+)?Answer|Accepted|Explanation):?\s*)/gi;
-  let lastSafeNewline = -1;
-
-  while ((match = safeNewlineRegex.exec(slice)) !== null) {
-    if (match.index > 0 && match.index < maxChars) {
-      lastSafeNewline = match.index;
-    }
-  }
-
-  if (lastSafeNewline >= Math.min(100, Math.floor(maxChars * 0.1))) {
-    return lastSafeNewline;
+  const safeNewlineBoundary = findLastRegexBoundary(
+    /\n(?!\s*(?:[A-Za-z0-9][\.\)]|(?:Correct\s+)?Answer|Accepted|Explanation):?\s*)/gi,
+    slice,
+    maxChars
+  );
+  if (safeNewlineBoundary >= minAcceptableBoundary) {
+    return safeNewlineBoundary;
   }
 
   // 4. Any newline before limit

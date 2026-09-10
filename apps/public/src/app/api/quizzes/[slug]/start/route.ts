@@ -10,6 +10,66 @@ interface StartAttemptBody {
   participant_data?: Record<string, any> | null;
 }
 
+function validateParticipantPayload(body: any): { error?: string } {
+  if (!body || typeof body !== 'object' || !body.participant_name || typeof body.participant_name !== 'string' || !body.participant_name.trim()) {
+    return { error: 'Participant name is required' };
+  }
+
+  if (body.participant_name.length > 100) {
+    return { error: 'Participant name exceeds maximum length of 100 characters' };
+  }
+
+  if (body.participant_email && (typeof body.participant_email !== 'string' || body.participant_email.length > 255)) {
+    return { error: 'Participant email is invalid' };
+  }
+
+  return {};
+}
+
+function verifyQuizAvailability(quiz: any): NextResponse | null {
+  const availability = quiz.availability;
+  if (!availability) return null;
+
+  if (availability.status === 'upcoming') {
+    return NextResponse.json({
+      success: false,
+      status: 'upcoming',
+      message: availability.message || 'This quiz has not started yet.',
+      startsAt: availability.startsAt || quiz.start_at
+    }, { status: 409 });
+  }
+
+  if (availability.status === 'expired') {
+    return NextResponse.json({
+      success: false,
+      status: 'expired',
+      message: availability.message || 'This quiz has expired.',
+      endsAt: availability.endsAt || quiz.end_at
+    }, { status: 410 });
+  }
+
+  if (!availability.isAvailable) {
+    return NextResponse.json({
+      success: false,
+      status: availability.status,
+      message: availability.message || 'Quiz is currently unavailable.'
+    }, { status: 403 });
+  }
+
+  return null;
+}
+
+function calculateAttemptExpiry(quiz: any, startedAt: string): string | null {
+  const isTimerEnabled = quiz.settings?.features?.timer !== false;
+  const timeLimitMinutes = quiz.settings?.time_limit_minutes;
+  const timeLimitSeconds = quiz.settings?.time_limit_seconds ?? (timeLimitMinutes && timeLimitMinutes > 0 ? timeLimitMinutes * 60 : null);
+  if (isTimerEnabled && timeLimitSeconds && timeLimitSeconds > 0) {
+    const expires = new Date(new Date(startedAt).getTime() + timeLimitSeconds * 1000);
+    return expires.toISOString();
+  }
+  return null;
+}
+
 export async function POST(req: NextRequest, { params }: { params: { slug: string } }) {
   try {
     const clientIp = getClientIp(req);
@@ -28,52 +88,19 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
       return NextResponse.json({ success: false, error: 'Invalid JSON payload' }, { status: 400 });
     }
 
-    const slug = params.slug;
-
-    if (!body || typeof body !== 'object' || !body.participant_name || typeof body.participant_name !== 'string' || !body.participant_name.trim()) {
-      return NextResponse.json({ success: false, error: 'Participant name is required' }, { status: 400 });
+    const val = validateParticipantPayload(body);
+    if (val.error) {
+      return NextResponse.json({ success: false, error: val.error }, { status: 400 });
     }
 
-    if (body.participant_name.length > 100) {
-      return NextResponse.json({ success: false, error: 'Participant name exceeds maximum length of 100 characters' }, { status: 400 });
-    }
-
-    if (body.participant_email && (typeof body.participant_email !== 'string' || body.participant_email.length > 255)) {
-      return NextResponse.json({ success: false, error: 'Participant email is invalid' }, { status: 400 });
-    }
-
-    const quiz = await getPublishedQuizBySlug(slug);
+    const quiz = await getPublishedQuizBySlug(params.slug);
     if (!quiz) {
       return NextResponse.json({ success: false, error: 'Quiz not found or not published' }, { status: 404 });
     }
 
-    const availability = quiz.availability;
-    if (availability) {
-      if (availability.status === 'upcoming') {
-        return NextResponse.json({
-          success: false,
-          status: 'upcoming',
-          message: availability.message || 'This quiz has not started yet.',
-          startsAt: availability.startsAt || quiz.start_at
-        }, { status: 409 });
-      }
-
-      if (availability.status === 'expired') {
-        return NextResponse.json({
-          success: false,
-          status: 'expired',
-          message: availability.message || 'This quiz has expired.',
-          endsAt: availability.endsAt || quiz.end_at
-        }, { status: 410 });
-      }
-
-      if (!availability.isAvailable) {
-        return NextResponse.json({
-          success: false,
-          status: availability.status,
-          message: availability.message || 'Quiz is currently unavailable.'
-        }, { status: 403 });
-      }
+    const availabilityError = verifyQuizAvailability(quiz);
+    if (availabilityError) {
+      return availabilityError;
     }
 
     // Classification: SECURITY-SENSITIVE
@@ -82,15 +109,7 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     // Cryptographically secure primary key identifier for the attempt
     const attemptId = randomUUID();
     const startedAt = new Date().toISOString();
-
-    let expiresAt: string | null = null;
-    const isTimerEnabled = quiz.settings?.features?.timer !== false;
-    const timeLimitMinutes = quiz.settings?.time_limit_minutes;
-    const timeLimitSeconds = quiz.settings?.time_limit_seconds ?? (timeLimitMinutes && timeLimitMinutes > 0 ? timeLimitMinutes * 60 : null);
-    if (isTimerEnabled && timeLimitSeconds && timeLimitSeconds > 0) {
-      const expires = new Date(new Date(startedAt).getTime() + timeLimitSeconds * 1000);
-      expiresAt = expires.toISOString();
-    }
+    const expiresAt = calculateAttemptExpiry(quiz, startedAt);
 
     // Persist attempt deterministically (Supabase if live, mockStore otherwise)
     await createQuizAttempt({

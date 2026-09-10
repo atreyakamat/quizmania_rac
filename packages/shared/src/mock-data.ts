@@ -209,16 +209,20 @@ class MockStore {
 
   syncFromDisk() {
     const data = readStoreFile();
-    if (data) {
-      if (Array.isArray(data.quizzes)) this.quizzes = data.quizzes;
-      if (Array.isArray(data.themes) && data.themes.length > 0) this.themes = data.themes;
-      if (Array.isArray(data.submissions)) this.submissions = data.submissions;
-      if (Array.isArray(data.attempts)) this.attempts = data.attempts;
-      if (Array.isArray(data.answers)) this.answers = data.answers;
-      if (Array.isArray(data.adminUsers) && data.adminUsers.length > 0) this.adminUsers = data.adminUsers;
-    } else {
+    if (!data) {
       this.syncToDisk();
+      return;
     }
+    this.hydrateFromStoreData(data);
+  }
+
+  private hydrateFromStoreData(data: NonNullable<ReturnType<typeof readStoreFile>>) {
+    if (Array.isArray(data.quizzes)) this.quizzes = data.quizzes;
+    if (Array.isArray(data.themes) && data.themes.length > 0) this.themes = data.themes;
+    if (Array.isArray(data.submissions)) this.submissions = data.submissions;
+    if (Array.isArray(data.attempts)) this.attempts = data.attempts;
+    if (Array.isArray(data.answers)) this.answers = data.answers;
+    if (Array.isArray(data.adminUsers) && data.adminUsers.length > 0) this.adminUsers = data.adminUsers;
   }
 
   syncToDisk() {

@@ -192,54 +192,42 @@ export async function verifyAdminAuthorization(
  * performs session refresh when access token is expired, and enforces
  * explicit admin authorization (admin_users table).
  */
-export async function requireAuthenticatedAdmin(request: Request): Promise<RequireAdminResult> {
-  // 1. CSRF Defense for mutating requests
-  const csrf = verifyCsrfOrigin(request);
-  if (!csrf.valid) {
-    return {
-      authorized: false,
-      status: 403,
-      error: csrf.reason || 'CSRF validation failed'
-    };
-  }
+function parseSsrAuthCookie(cookieHeader: string, ref: string): { accessToken?: string; refreshToken?: string } {
+  const ssrMatch = cookieHeader.match(new RegExp(`(?:^|;\\s*)sb-${ref}-auth-token=([^;]+)`));
+  if (!ssrMatch) return {};
+  try {
+    const decoded = decodeURIComponent(ssrMatch[1]);
+    const parsed = JSON.parse(decoded);
+    if (Array.isArray(parsed) && parsed.length >= 2) {
+      return { accessToken: parsed[0], refreshToken: parsed[1] };
+    }
+    if (parsed && typeof parsed === 'object') {
+      return { accessToken: parsed.access_token, refreshToken: parsed.refresh_token };
+    }
+  } catch {}
+  return {};
+}
 
-  // 2. Extract session tokens from Cookies or Authorization header
+function extractSessionTokensFromRequest(request: Request): { accessToken: string | null; refreshToken: string | null } {
   let accessToken: string | null = null;
   let refreshToken: string | null = null;
-
   const cookieHeader = request.headers.get('cookie') || '';
 
-  // Extract access token (checking sb-access-token, then sb-admin-token)
   const accessMatch = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_ACCESS_COOKIE}=([^;]+)`));
   if (accessMatch) {
     accessToken = decodeURIComponent(accessMatch[1]);
   }
 
-  // Extract refresh token
   const refreshMatch = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_REFRESH_COOKIE}=([^;]+)`));
   if (refreshMatch) {
     refreshToken = decodeURIComponent(refreshMatch[1]);
   }
 
-  // Check standard Supabase SSR cookie format sb-<ref>-auth-token
   const ref = getSupabaseProjectRef();
   if (ref && (!accessToken || !refreshToken)) {
-    const ssrMatch = cookieHeader.match(new RegExp(`(?:^|;\\s*)sb-${ref}-auth-token=([^;]+)`));
-    if (ssrMatch) {
-      try {
-        const decoded = decodeURIComponent(ssrMatch[1]);
-        const parsed = JSON.parse(decoded);
-        if (Array.isArray(parsed) && parsed.length >= 2) {
-          if (!accessToken) accessToken = parsed[0];
-          if (!refreshToken) refreshToken = parsed[1];
-        } else if (parsed && typeof parsed === 'object') {
-          if (!accessToken && parsed.access_token) accessToken = parsed.access_token;
-          if (!refreshToken && parsed.refresh_token) refreshToken = parsed.refresh_token;
-        }
-      } catch {
-        // Safe fallback
-      }
-    }
+    const ssr = parseSsrAuthCookie(cookieHeader, ref);
+    if (!accessToken && ssr.accessToken) accessToken = ssr.accessToken;
+    if (!refreshToken && ssr.refreshToken) refreshToken = ssr.refreshToken;
   }
 
   if (!accessToken) {
@@ -256,7 +244,6 @@ export async function requireAuthenticatedAdmin(request: Request): Promise<Requi
     }
   }
 
-  // Header Bearer fallback
   if (!accessToken) {
     const authHeader = request.headers.get('authorization');
     if (authHeader?.startsWith('Bearer ')) {
@@ -264,7 +251,127 @@ export async function requireAuthenticatedAdmin(request: Request): Promise<Requi
     }
   }
 
-  // If neither token is provided: Reject unauthenticated caller
+  return { accessToken, refreshToken };
+}
+
+async function handleTestEnvironmentAuth(
+  accessToken: string | null,
+  refreshToken: string | null
+): Promise<RequireAdminResult | null> {
+  if (accessToken === 'test-admin-token') {
+    const authCheck = await verifyAdminAuthorization('00000000-0000-4000-a000-000000000001', 'admin@quizmania.dev');
+    if (!authCheck.authorized) {
+      return { authorized: false, status: 403, error: authCheck.reason };
+    }
+    return {
+      authorized: true,
+      status: 200,
+      user: {
+        id: '00000000-0000-4000-a000-000000000001',
+        email: 'admin@quizmania.dev',
+        role: authCheck.role || 'admin'
+      }
+    };
+  }
+
+  if (accessToken === 'test-disabled-admin-token') {
+    const authCheck = await verifyAdminAuthorization('00000000-0000-4000-a000-000000000002', 'disabled-admin@quizmania.dev');
+    return {
+      authorized: false,
+      status: 403,
+      error: authCheck.reason || 'Administrator account is disabled'
+    };
+  }
+
+  if (accessToken === 'test-non-admin-token') {
+    return {
+      authorized: false,
+      status: 403,
+      error: 'Access denied: You do not have administrator privileges.'
+    };
+  }
+
+  if (accessToken === 'test-expired-token') {
+    if (refreshToken === 'valid-refresh-token') {
+      return {
+        authorized: true,
+        status: 200,
+        user: {
+          id: '00000000-0000-4000-a000-000000000001',
+          email: 'admin@quizmania.dev',
+          role: 'admin'
+        },
+        refreshedTokens: {
+          accessToken: 'test-admin-token',
+          refreshToken: 'valid-refresh-token',
+          expiresIn: 3600
+        }
+      };
+    }
+    return {
+      authorized: false,
+      status: 401,
+      error: 'Invalid or expired session. Please sign in again.'
+    };
+  }
+
+  return null;
+}
+
+async function authenticateWithSupabase(
+  supabase: any,
+  accessToken: string | null,
+  refreshToken: string | null
+): Promise<{ user: any; refreshedTokens?: SessionTokens } | null> {
+  if (accessToken) {
+    try {
+      const { data, error } = await supabase.auth.getUser(accessToken);
+      if (!error && data?.user) {
+        return { user: data.user };
+      }
+    } catch {}
+  }
+
+  if (refreshToken) {
+    try {
+      const { data, error } = await supabase.auth.refreshSession({
+        refresh_token: refreshToken
+      });
+      if (!error && data?.session && data?.user) {
+        return {
+          user: data.user,
+          refreshedTokens: {
+            accessToken: data.session.access_token,
+            refreshToken: data.session.refresh_token,
+            expiresIn: data.session.expires_in
+          }
+        };
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+/**
+ * Centralized server-side administrator authorization guard.
+ * Validates session token & refresh token against Supabase Auth,
+ * performs session refresh when access token is expired, and enforces
+ * explicit admin authorization (admin_users table).
+ */
+export async function requireAuthenticatedAdmin(request: Request): Promise<RequireAdminResult> {
+  // 1. CSRF Defense for mutating requests
+  const csrf = verifyCsrfOrigin(request);
+  if (!csrf.valid) {
+    return {
+      authorized: false,
+      status: 403,
+      error: csrf.reason || 'CSRF validation failed'
+    };
+  }
+
+  // 2. Extract session tokens from Cookies or Authorization header
+  const { accessToken, refreshToken } = extractSessionTokensFromRequest(request);
   if (!accessToken && !refreshToken) {
     return {
       authorized: false,
@@ -273,65 +380,10 @@ export async function requireAuthenticatedAdmin(request: Request): Promise<Requi
     };
   }
 
-  // 3. Automated Test Runner Handling (STRICTLY isolated to automated test runner; NEVER in production or runtime server)
-  const isTestEnvironment = process.env.NODE_ENV === 'test';
-  if (isTestEnvironment) {
-    if (accessToken === 'test-admin-token') {
-      const authCheck = await verifyAdminAuthorization('00000000-0000-4000-a000-000000000001', 'admin@quizmania.dev');
-      if (!authCheck.authorized) {
-        return { authorized: false, status: 403, error: authCheck.reason };
-      }
-      return {
-        authorized: true,
-        status: 200,
-        user: {
-          id: '00000000-0000-4000-a000-000000000001',
-          email: 'admin@quizmania.dev',
-          role: authCheck.role || 'admin'
-        }
-      };
-    }
-
-    if (accessToken === 'test-disabled-admin-token') {
-      const authCheck = await verifyAdminAuthorization('00000000-0000-4000-a000-000000000002', 'disabled-admin@quizmania.dev');
-      return {
-        authorized: false,
-        status: 403,
-        error: authCheck.reason || 'Administrator account is disabled'
-      };
-    }
-
-    if (accessToken === 'test-non-admin-token') {
-      return {
-        authorized: false,
-        status: 403,
-        error: 'Access denied: You do not have administrator privileges.'
-      };
-    }
-
-    if (accessToken === 'test-expired-token') {
-      if (refreshToken === 'valid-refresh-token') {
-        return {
-          authorized: true,
-          status: 200,
-          user: {
-            id: '00000000-0000-4000-a000-000000000001',
-            email: 'admin@quizmania.dev',
-            role: 'admin'
-          },
-          refreshedTokens: {
-            accessToken: 'test-admin-token',
-            refreshToken: 'valid-refresh-token',
-            expiresIn: 3600
-          }
-        };
-      }
-      return {
-        authorized: false,
-        status: 401,
-        error: 'Invalid or expired session. Please sign in again.'
-      };
-    }
+  // 3. Automated Test Runner Handling (STRICTLY isolated to automated test runner; NEVER in production)
+  if (process.env.NODE_ENV === 'test') {
+    const testResult = await handleTestEnvironmentAuth(accessToken, refreshToken);
+    if (testResult) return testResult;
   }
 
   // 4. Supabase Auth Live Verification & Session Refresh Lifecycle
@@ -344,42 +396,8 @@ export async function requireAuthenticatedAdmin(request: Request): Promise<Requi
     };
   }
 
-  let authenticatedUser: any = null;
-  let newSessionTokens: SessionTokens | undefined = undefined;
-
-  // Case A: Verify with access token
-  if (accessToken) {
-    try {
-      const { data, error } = await supabase.auth.getUser(accessToken);
-      if (!error && data?.user) {
-        authenticatedUser = data.user;
-      }
-    } catch {
-      // Token verification failed, attempt refresh
-    }
-  }
-
-  // Case B: Access token was expired, attempt session refresh
-  if (!authenticatedUser && refreshToken) {
-    try {
-      const { data, error } = await supabase.auth.refreshSession({
-        refresh_token: refreshToken
-      });
-
-      if (!error && data?.session && data?.user) {
-        authenticatedUser = data.user;
-        newSessionTokens = {
-          accessToken: data.session.access_token,
-          refreshToken: data.session.refresh_token,
-          expiresIn: data.session.expires_in
-        };
-      }
-    } catch {
-      // Refresh failed
-    }
-  }
-
-  if (!authenticatedUser) {
+  const authSession = await authenticateWithSupabase(supabase, accessToken, refreshToken);
+  if (!authSession) {
     return {
       authorized: false,
       status: 401,
@@ -389,8 +407,8 @@ export async function requireAuthenticatedAdmin(request: Request): Promise<Requi
 
   // 5. Enforce Explicit Admin Authorization (NO domain-based or metadata-only bypass)
   const authCheck = await verifyAdminAuthorization(
-    authenticatedUser.id,
-    authenticatedUser.email || ''
+    authSession.user.id,
+    authSession.user.email || ''
   );
 
   if (!authCheck.authorized) {
@@ -405,11 +423,11 @@ export async function requireAuthenticatedAdmin(request: Request): Promise<Requi
     authorized: true,
     status: 200,
     user: {
-      id: authenticatedUser.id,
-      email: authenticatedUser.email,
+      id: authSession.user.id,
+      email: authSession.user.email,
       role: authCheck.role || 'admin',
-      ...authenticatedUser.user_metadata
+      ...authSession.user.user_metadata
     },
-    refreshedTokens: newSessionTokens
+    refreshedTokens: authSession.refreshedTokens
   };
 }

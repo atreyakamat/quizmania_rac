@@ -8,158 +8,157 @@ import { mockStore } from '../mock-data';
  * CRITICAL SECURITY INVARIANT:
  * This layer MUST NEVER return `is_correct`, correct answers, or internal metadata to the client.
  */
-export async function getPublishedQuizBySlug(slug: string): Promise<PublicQuiz | null> {
-  const isLive = await isSupabaseDatabaseReady();
-  if (isLive) {
-    const supabase = getSupabasePublicClient();
-    if (supabase) {
-      // 1. Fetch quiz by slug where status is published
-      const { data: quizData, error: quizError } = await supabase
-        .from('quizzes')
-        .select(`
-          id,
-          title,
-          slug,
-          description,
-          cover_image,
-          status,
-          settings,
-          instructions,
-          theme:themes(*),
-          sections:sections(*)
-        `)
-        .eq('slug', slug)
-        .eq('status', 'published')
-        .maybeSingle();
+function mapPublicOptions(optionsData: any[], questionId: string): PublicOption[] {
+  return optionsData
+    .filter(opt => opt.question_id === questionId)
+    .map(opt => ({
+      id: opt.id,
+      question_id: opt.question_id,
+      option_text: opt.option_text,
+      option_image: opt.option_image,
+      option_order: opt.option_order
+    }));
+}
 
-      if (quizError) {
-        throw new Error(`Supabase getPublishedQuizBySlug error: ${quizError.message}`);
-      }
+function buildPublicQuestionsFromLive(questionsData: any[], optionsData: any[]): {
+  questions: PublicQuestion[];
+  totalMarks: number;
+} {
+  let totalMarks = 0;
+  const questions: PublicQuestion[] = questionsData.map(q => {
+    totalMarks += Number(q.marks) || 0;
+    const opts = mapPublicOptions(optionsData, q.id);
 
-      if (quizData) {
-        // 2. Fetch questions ordered by question_order
-        const { data: questionsData, error: qError } = await supabase
-          .from('questions')
-          .select(`
-            id,
-            quiz_id,
-            question_text,
-            question_description,
-            question_type,
-            question_image,
-            marks,
-            negative_marks,
-            required,
-            question_order,
-            section_title,
-            section_description,
-            time_limit_seconds,
-            scoring_method
-          `)
-          .eq('quiz_id', quizData.id)
-          .order('question_order', { ascending: true });
+    return {
+      id: q.id,
+      quiz_id: q.quiz_id,
+      question_text: q.question_text,
+      question_description: q.question_description,
+      question_type: q.question_type,
+      question_image: q.question_image,
+      marks: q.marks,
+      negative_marks: q.negative_marks,
+      required: q.required,
+      question_order: q.question_order,
+      section_title: q.section_title,
+      section_description: q.section_description,
+      time_limit_seconds: q.time_limit_seconds,
+      scoring_method: q.scoring_method,
+      options: opts
+    };
+  });
 
-        if (qError) throw new Error(`Supabase questions error: ${qError.message}`);
+  return { questions, totalMarks };
+}
 
-        if (questionsData) {
-          const questionIds = questionsData.map(q => q.id);
+async function fetchLivePublishedQuiz(slug: string): Promise<PublicQuiz | null> {
+  const supabase = getSupabasePublicClient();
+  if (!supabase) return null;
 
-          // 3. Fetch options explicitly omitting is_correct
-          let optionsData: any[] = [];
-          if (questionIds.length > 0) {
-            const { data: opts, error: optError } = await supabase
-              .from('options')
-              .select(`
-                id,
-                question_id,
-                option_text,
-                option_image,
-                option_order
-              `)
-              .in('question_id', questionIds)
-              .order('option_order', { ascending: true });
+  const { data: quizData, error: quizError } = await supabase
+    .from('quizzes')
+    .select(`
+      id,
+      title,
+      slug,
+      description,
+      cover_image,
+      status,
+      settings,
+      instructions,
+      theme:themes(*),
+      sections:sections(*)
+    `)
+    .eq('slug', slug)
+    .eq('status', 'published')
+    .maybeSingle();
 
-            if (optError) throw new Error(`Supabase options error: ${optError.message}`);
-            optionsData = opts || [];
-          }
+  if (quizError) {
+    throw new Error(`Supabase getPublishedQuizBySlug error: ${quizError.message}`);
+  }
+  if (!quizData) return null;
 
-          // 4. Assemble public questions
-          let totalMarks = 0;
-          const questions: PublicQuestion[] = questionsData.map(q => {
-            totalMarks += Number(q.marks) || 0;
-            const opts: PublicOption[] = optionsData
-              .filter(opt => opt.question_id === q.id)
-              .map(opt => ({
-                id: opt.id,
-                question_id: opt.question_id,
-                option_text: opt.option_text,
-                option_image: opt.option_image,
-                option_order: opt.option_order
-              }));
+  const { data: questionsData, error: qError } = await supabase
+    .from('questions')
+    .select(`
+      id,
+      quiz_id,
+      question_text,
+      question_description,
+      question_type,
+      question_image,
+      marks,
+      negative_marks,
+      required,
+      question_order,
+      section_title,
+      section_description,
+      time_limit_seconds,
+      scoring_method
+    `)
+    .eq('quiz_id', quizData.id)
+    .order('question_order', { ascending: true });
 
-            return {
-              id: q.id,
-              quiz_id: q.quiz_id,
-              question_text: q.question_text,
-              question_description: q.question_description,
-              question_type: q.question_type,
-              question_image: q.question_image,
-              marks: q.marks,
-              negative_marks: q.negative_marks,
-              required: q.required,
-              question_order: q.question_order,
-              section_title: q.section_title,
-              section_description: q.section_description,
-              time_limit_seconds: q.time_limit_seconds,
-              scoring_method: q.scoring_method,
-              options: opts
-            };
-          });
+  if (qError) throw new Error(`Supabase questions error: ${qError.message}`);
+  if (!questionsData) return null;
 
-          const sections = Array.isArray(quizData.sections)
-            ? [...quizData.sections].sort((a: any, b: any) => (a.section_order || 0) - (b.section_order || 0))
-            : [];
+  const questionIds = questionsData.map(q => q.id);
+  let optionsData: any[] = [];
+  if (questionIds.length > 0) {
+    const { data: opts, error: optError } = await supabase
+      .from('options')
+      .select(`
+        id,
+        question_id,
+        option_text,
+        option_image,
+        option_order
+      `)
+      .in('question_id', questionIds)
+      .order('option_order', { ascending: true });
 
-          const start_at = (quizData as any).start_at ?? quizData.settings?.start_at ?? null;
-          const end_at = (quizData as any).end_at ?? quizData.settings?.end_at ?? null;
-          const schedule_enabled = quizData.settings?.schedule_enabled ?? Boolean(start_at || end_at);
-          const settings = {
-            ...(quizData.settings || {}),
-            schedule_enabled,
-            start_at,
-            end_at
-          };
-
-          const publicQuiz: PublicQuiz = {
-            id: quizData.id,
-            title: quizData.title,
-            slug: quizData.slug,
-            description: quizData.description,
-            cover_image: quizData.cover_image,
-            status: 'published',
-            theme: (Array.isArray(quizData.theme) ? quizData.theme[0] : quizData.theme) as Theme | null,
-            settings,
-            instructions: quizData.instructions ?? (quizData.settings as any)?.instructions ?? null,
-            start_at,
-            end_at,
-            sections,
-            questions,
-            totalQuestions: questions.length,
-            totalMarks
-          };
-          publicQuiz.availability = getQuizAvailability(publicQuiz);
-          return publicQuiz;
-        }
-      }
-      return null;
-    }
+    if (optError) throw new Error(`Supabase options error: ${optError.message}`);
+    optionsData = opts || [];
   }
 
-  // Fallback to local mock data store (Disallowed in production)
-  if (process.env.NODE_ENV === 'production') {
-    return null;
-  }
+  const { questions, totalMarks } = buildPublicQuestionsFromLive(questionsData, optionsData);
 
+  const sections = Array.isArray(quizData.sections)
+    ? [...quizData.sections].sort((a: any, b: any) => (a.section_order || 0) - (b.section_order || 0))
+    : [];
+
+  const start_at = (quizData as any).start_at ?? quizData.settings?.start_at ?? null;
+  const end_at = (quizData as any).end_at ?? quizData.settings?.end_at ?? null;
+  const schedule_enabled = quizData.settings?.schedule_enabled ?? Boolean(start_at || end_at);
+  const settings = {
+    ...(quizData.settings || {}),
+    schedule_enabled,
+    start_at,
+    end_at
+  };
+
+  const publicQuiz: PublicQuiz = {
+    id: quizData.id,
+    title: quizData.title,
+    slug: quizData.slug,
+    description: quizData.description,
+    cover_image: quizData.cover_image,
+    status: 'published',
+    theme: (Array.isArray(quizData.theme) ? quizData.theme[0] : quizData.theme) as Theme | null,
+    settings,
+    instructions: quizData.instructions ?? (quizData.settings as any)?.instructions ?? null,
+    start_at,
+    end_at,
+    sections,
+    questions,
+    totalQuestions: questions.length,
+    totalMarks
+  };
+  publicQuiz.availability = getQuizAvailability(publicQuiz);
+  return publicQuiz;
+}
+
+function fetchMockPublishedQuiz(slug: string): PublicQuiz | null {
   const mockQuiz = mockStore.getQuizBySlug(slug);
   if (!mockQuiz || mockQuiz.status !== 'published') {
     return null;
@@ -168,7 +167,6 @@ export async function getPublishedQuizBySlug(slug: string): Promise<PublicQuiz |
   let totalMarks = 0;
   const questions: PublicQuestion[] = (mockQuiz.questions || []).map(q => {
     totalMarks += q.marks || 0;
-    // Strictly strip `is_correct`
     const publicOptions: PublicOption[] = (q.options || []).map(opt => ({
       id: opt.id,
       question_id: opt.question_id,
@@ -229,6 +227,20 @@ export async function getPublishedQuizBySlug(slug: string): Promise<PublicQuiz |
   };
   publicMockQuiz.availability = getQuizAvailability(publicMockQuiz);
   return publicMockQuiz;
+}
+
+export async function getPublishedQuizBySlug(slug: string): Promise<PublicQuiz | null> {
+  const isLive = await isSupabaseDatabaseReady();
+  if (isLive) {
+    return fetchLivePublishedQuiz(slug);
+  }
+
+  // Fallback to local mock data store (Disallowed in production)
+  if (process.env.NODE_ENV === 'production') {
+    return null;
+  }
+
+  return fetchMockPublishedQuiz(slug);
 }
 
 /**

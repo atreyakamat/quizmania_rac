@@ -32,6 +32,149 @@ Answer: Mars
 3. Which of the following are programming languages?
 Answers: Python, JavaScript`;
 
+async function readNdjsonStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  onProgress: (msg: string) => void
+): Promise<any> {
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalData: any = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const msg = JSON.parse(line);
+        if (msg.type === 'progress') {
+          onProgress(msg.message);
+        } else if (msg.type === 'complete') {
+          finalData = msg;
+        } else if (msg.type === 'error') {
+          const err = new Error(msg.error || 'Failed to generate quiz with AI') as any;
+          err.validationErrors = msg.validationErrors;
+          throw err;
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message.includes('Failed to generate')) {
+          throw e;
+        }
+      }
+    }
+  }
+
+  if (!finalData) {
+    throw new Error('Incomplete response from AI generator.');
+  }
+  return finalData;
+}
+
+function parseAndConvertAiQuiz(rawQuiz: any, existingQuizId?: string): { quiz: Quiz; summary: ImportSummary } {
+  const conv = convertQuizJsonToQuiz(rawQuiz, existingQuizId);
+  if (!conv.success || !conv.quiz || !conv.summary) {
+    throw new Error(conv.errors && conv.errors.length > 0 ? conv.errors[0] : 'Failed to parse generated quiz');
+  }
+  return { quiz: conv.quiz, summary: conv.summary };
+}
+
+function AiGeneratorErrorAlert({
+  error,
+  validationErrors
+}: {
+  error: string | null;
+  validationErrors: string[];
+}) {
+  if (!error) return null;
+  return (
+    <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-2 text-xs">
+      <div className="flex items-center gap-2 text-rose-800 font-semibold">
+        <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+        <span>AI Generation Error:</span>
+      </div>
+      <p className="text-rose-700 leading-relaxed pl-6">{error}</p>
+      {validationErrors.length > 0 && (
+        <ul className="list-disc list-inside text-rose-700 space-y-0.5 pl-6 font-mono text-[11px]">
+          {validationErrors.map((err, i) => (
+            <li key={i}>{err}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function AiGeneratorPreviewCard({
+  generatedJson,
+  questionCount,
+  copied,
+  imported,
+  onCopy,
+  onUse
+}: {
+  generatedJson: string | null;
+  questionCount: number;
+  copied: boolean;
+  imported: boolean;
+  onCopy: () => void;
+  onUse: () => void;
+}) {
+  if (!generatedJson) return null;
+  return (
+    <div className="mt-6 border border-purple-200 bg-purple-50/30 rounded-xl p-5 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          <span className="font-bold text-slate-800 text-xs">
+            Generated Quiz JSON ({questionCount} Questions)
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onCopy}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-2xs"
+          >
+            {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
+            <span>{copied ? 'Copied' : 'Copy JSON'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onUse}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors shadow-xs ${
+              imported ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+          >
+            <ArrowDownToLine className="w-3.5 h-3.5" />
+            <span>{imported ? 'Imported! Click to Re-import' : 'Use This Quiz / Import'}</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="relative">
+        <pre className="p-3 bg-slate-900 text-slate-100 rounded-lg text-[11px] font-mono overflow-x-auto max-h-72 leading-relaxed">
+          {generatedJson}
+        </pre>
+      </div>
+
+      {imported && (
+        <div className="p-3 bg-emerald-100 border border-emerald-300 rounded-lg text-emerald-900 text-xs flex items-center gap-2 font-medium">
+          <CheckCircle2 className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+          <span>
+            Successfully loaded into editor! Scroll down to review, edit questions, and save draft.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function QuizAiGenerator({
   onImport,
   existingQuizId,
@@ -49,7 +192,6 @@ export function QuizAiGenerator({
   const [generatedSummary, setGeneratedSummary] = useState<ImportSummary | null>(null);
   const [copied, setCopied] = useState(false);
   const [imported, setImported] = useState(false);
-
   const [progressText, setProgressText] = useState<string | null>(null);
 
   const handleLoadSample = () => {
@@ -102,80 +244,35 @@ export function QuizAiGenerator({
       });
 
       const contentType = res.headers.get('content-type') || '';
+      let rawQuiz: any;
+      let jsonPayload = '';
 
       if (contentType.includes('application/x-ndjson') && res.body) {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let finalData: any = null;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const msg = JSON.parse(line);
-              if (msg.type === 'progress') {
-                setProgressText(msg.message);
-              } else if (msg.type === 'complete') {
-                finalData = msg;
-              } else if (msg.type === 'error') {
-                if (msg.validationErrors && Array.isArray(msg.validationErrors)) {
-                  setValidationErrors(msg.validationErrors);
-                }
-                throw new Error(msg.error || 'Failed to generate quiz with AI');
-              }
-            } catch (e) {
-              if (e instanceof Error && e.message.includes('Failed to generate')) {
-                throw e;
-              }
-            }
-          }
-        }
-
-        if (!finalData) {
-          throw new Error('Incomplete response from AI generator.');
-        }
-
-        const rawQuiz = finalData.quiz || finalData.data;
-        const conv = convertQuizJsonToQuiz(rawQuiz, existingQuizId);
-        if (!conv.success || !conv.quiz || !conv.summary) {
-          throw new Error(conv.errors && conv.errors.length > 0 ? conv.errors[0] : 'Failed to parse generated quiz');
-        }
-
-        setGeneratedJson(finalData.json || JSON.stringify(rawQuiz, null, 2));
-        setGeneratedQuiz(conv.quiz);
-        setGeneratedSummary(conv.summary);
-        onImport(conv.quiz, conv.summary);
-        setImported(true);
+        const streamData = await readNdjsonStream(res.body.getReader(), setProgressText);
+        rawQuiz = streamData.quiz || streamData.data;
+        jsonPayload = streamData.json || JSON.stringify(rawQuiz, null, 2);
       } else {
         const data = await res.json();
-
         if (!res.ok || !data.success) {
           if (data.validationErrors && Array.isArray(data.validationErrors)) {
             setValidationErrors(data.validationErrors);
           }
           throw new Error(data.error || 'Failed to generate quiz with AI');
         }
-
-        const rawQuiz = data.quiz || data.data;
-        const conv = convertQuizJsonToQuiz(rawQuiz, existingQuizId);
-        if (!conv.success || !conv.quiz || !conv.summary) {
-          throw new Error(conv.errors && conv.errors.length > 0 ? conv.errors[0] : 'Failed to parse generated quiz');
-        }
-
-        setGeneratedJson(data.json || JSON.stringify(rawQuiz, null, 2));
-        setGeneratedQuiz(conv.quiz);
-        setGeneratedSummary(conv.summary);
-        onImport(conv.quiz, conv.summary);
-        setImported(true);
+        rawQuiz = data.quiz || data.data;
+        jsonPayload = data.json || JSON.stringify(rawQuiz, null, 2);
       }
-    } catch (err) {
+
+      const { quiz, summary } = parseAndConvertAiQuiz(rawQuiz, existingQuizId);
+      setGeneratedJson(jsonPayload);
+      setGeneratedQuiz(quiz);
+      setGeneratedSummary(summary);
+      onImport(quiz, summary);
+      setImported(true);
+    } catch (err: any) {
+      if (err?.validationErrors && Array.isArray(err.validationErrors)) {
+        setValidationErrors(err.validationErrors);
+      }
       setError(err instanceof Error ? err.message : 'Unknown error during AI generation');
     } finally {
       setIsGenerating(false);
@@ -202,7 +299,6 @@ export function QuizAiGenerator({
 
   return (
     <div className="space-y-5">
-      {/* Description / Instruction Banner */}
       <div className="bg-slate-50/70 p-3.5 rounded-lg border border-slate-200 text-xs text-slate-600 flex items-start gap-2.5">
         <Bot className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
         <div>
@@ -211,7 +307,6 @@ export function QuizAiGenerator({
         </div>
       </div>
 
-      {/* Optional Metadata Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -239,7 +334,6 @@ export function QuizAiGenerator({
         </div>
       </div>
 
-      {/* Raw Text Textarea */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <label className="block text-xs font-semibold text-slate-700">
@@ -281,25 +375,8 @@ export function QuizAiGenerator({
         />
       </div>
 
-      {/* Error state */}
-      {error && (
-        <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-2 text-xs">
-          <div className="flex items-center gap-2 text-rose-800 font-semibold">
-            <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
-            <span>AI Generation Error:</span>
-          </div>
-          <p className="text-rose-700 leading-relaxed pl-6">{error}</p>
-          {validationErrors.length > 0 && (
-            <ul className="list-disc list-inside text-rose-700 space-y-0.5 pl-6 font-mono text-[11px]">
-              {validationErrors.map((err, i) => (
-                <li key={i}>{err}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      <AiGeneratorErrorAlert error={error} validationErrors={validationErrors} />
 
-      {/* Generate Button Row */}
       <div className="flex items-center justify-between pt-1">
         <div className="text-[11px] text-slate-400">
           Powered by local Ollama backend. No questions leave your private environment.
@@ -324,57 +401,14 @@ export function QuizAiGenerator({
         </button>
       </div>
 
-      {/* Generated JSON Preview Card */}
-      {generatedJson && (
-        <div className="mt-6 border border-purple-200 bg-purple-50/30 rounded-xl p-5 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span className="font-bold text-slate-800 text-xs">
-                Generated Quiz JSON ({generatedSummary?.questionsCount || 0} Questions)
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleCopyJson}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-2xs"
-              >
-                {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
-                <span>{copied ? 'Copied' : 'Copy JSON'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleUseQuiz}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors shadow-xs ${
-                  imported ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-              >
-                <ArrowDownToLine className="w-3.5 h-3.5" />
-                <span>{imported ? 'Imported! Click to Re-import' : 'Use This Quiz / Import'}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* JSON code view */}
-          <div className="relative">
-            <pre className="p-3 bg-slate-900 text-slate-100 rounded-lg text-[11px] font-mono overflow-x-auto max-h-72 leading-relaxed">
-              {generatedJson}
-            </pre>
-          </div>
-
-          {imported && (
-            <div className="p-3 bg-emerald-100 border border-emerald-300 rounded-lg text-emerald-900 text-xs flex items-center gap-2 font-medium">
-              <CheckCircle2 className="w-4 h-4 text-emerald-700 flex-shrink-0" />
-              <span>
-                Successfully loaded into editor! Scroll down to review, edit questions, and save draft.
-              </span>
-            </div>
-          )}
-        </div>
-      )}
+      <AiGeneratorPreviewCard
+        generatedJson={generatedJson}
+        questionCount={generatedSummary?.questionsCount || 0}
+        copied={copied}
+        imported={imported}
+        onCopy={handleCopyJson}
+        onUse={handleUseQuiz}
+      />
     </div>
   );
 }

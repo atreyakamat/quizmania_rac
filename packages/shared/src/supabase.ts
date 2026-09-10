@@ -5,6 +5,31 @@ let adminClientInstance: SupabaseClient | null = null;
 
 const DEFAULT_SUPABASE_URL = 'https://eaqmwvxggnyprletpklr.supabase.co';
 
+function parseEnvLines(content: string): void {
+  for (const line of content.split('\n')) {
+    const match = line.match(/^([^=]+)=(.*)$/);
+    if (!match) continue;
+    const key = match[1].trim();
+    const val = match[2].trim();
+    if (!process.env[key]) {
+      process.env[key] = val;
+    }
+  }
+}
+
+function findEnvLocalPath(fs: any, path: any): string | null {
+  const candidates = [
+    path.resolve(process.cwd(), '.env.local'),
+    path.resolve(process.cwd(), '../../.env.local'),
+    path.resolve(__dirname, '../../../.env.local'),
+    path.resolve(__dirname, '../../../../.env.local')
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 function loadEnvIfAvailable(): void {
   if (typeof window !== 'undefined') return;
   if (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return;
@@ -14,27 +39,9 @@ function loadEnvIfAvailable(): void {
       : eval('require');
     const fs = req('fs');
     const path = req('path');
-    const candidates = [
-      path.resolve(process.cwd(), '.env.local'),
-      path.resolve(process.cwd(), '../../.env.local'),
-      path.resolve(__dirname, '../../../.env.local'),
-      path.resolve(__dirname, '../../../../.env.local')
-    ];
-    for (const p of candidates) {
-      if (fs.existsSync(p)) {
-        const content = fs.readFileSync(p, 'utf8');
-        for (const line of content.split('\n')) {
-          const match = line.match(/^([^=]+)=(.*)$/);
-          if (match) {
-            const key = match[1].trim();
-            const val = match[2].trim();
-            if (!process.env[key]) {
-              process.env[key] = val;
-            }
-          }
-        }
-        break;
-      }
+    const envFile = findEnvLocalPath(fs, path);
+    if (envFile) {
+      parseEnvLines(fs.readFileSync(envFile, 'utf8'));
     }
   } catch {}
 }

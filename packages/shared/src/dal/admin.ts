@@ -12,7 +12,8 @@ import type {
   ResponsesFilterParams,
   ResponsesSummary,
   PaginatedResponsesResult,
-  Answer
+  Answer,
+  QuizSection
 } from '@quizmania/types';
 import { convertQuizJsonToQuiz, getQuizAvailability, validateScheduleTimes, generateCanonicalUuid } from '@quizmania/quiz-schema';
 import { getSupabaseAdminClient, isSupabaseDatabaseReady } from '../supabase';
@@ -54,146 +55,309 @@ export function normalizeQuizRecord(quiz: any): Quiz {
  * Admin Data Access Layer (Local & Private Server-Side Only)
  * Deterministic: When Supabase is ready, uses Supabase. Otherwise uses local disk-synced store.
  */
-export async function getAllQuizzes(filterStatus?: QuizStatus): Promise<Quiz[]> {
-  const isLive = await isSupabaseDatabaseReady();
-  if (isLive) {
-    const supabase = getSupabaseAdminClient();
-    if (supabase) {
-      let query = supabase
-        .from('quizzes')
-        .select(`
-          *,
-          theme:themes(*),
-          sections:sections(*),
-          questions:questions(
-            *,
-            options:options(*)
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (filterStatus) {
-        query = query.eq('status', filterStatus);
-      }
-
-      const { data, error } = await query;
-      if (error) {
-        throw new Error(`Supabase getAllQuizzes error: ${error.message}`);
-      }
-      if (data) {
-        for (const quiz of data as any[]) {
-          if (quiz.questions && Array.isArray(quiz.questions)) {
-            quiz.questions.sort((a: any, b: any) => (a.question_order || 0) - (b.question_order || 0));
-            for (const q of quiz.questions) {
-              if (q.options && Array.isArray(q.options)) {
-                q.options.sort((a: any, b: any) => (a.option_order || 0) - (b.option_order || 0));
-              }
-            }
-          }
-          if (quiz.sections && Array.isArray(quiz.sections)) {
-            quiz.sections.sort((a: any, b: any) => (a.section_order || 0) - (b.section_order || 0));
-          }
-        }
-        return (data as any[]).map(normalizeQuizRecord);
+function sortQuizQuestionsAndSections(quiz: any): any {
+  if (Array.isArray(quiz.questions)) {
+    quiz.questions.sort((a: any, b: any) => (a.question_order || 0) - (b.question_order || 0));
+    for (const q of quiz.questions) {
+      if (Array.isArray(q.options)) {
+        q.options.sort((a: any, b: any) => (a.option_order || 0) - (b.option_order || 0));
       }
     }
   }
-
-  let list = mockStore.getQuizzes();
-  if (filterStatus) {
-    list = list.filter(q => q.status === filterStatus);
+  if (Array.isArray(quiz.sections)) {
+    quiz.sections.sort((a: any, b: any) => (a.section_order || 0) - (b.section_order || 0));
   }
+  return quiz;
+}
+
+const QUIZ_QUERY_SELECT = `
+  *,
+  theme:themes(*),
+  sections:sections(*),
+  questions:questions(
+    *,
+    options:options(*)
+  )
+`;
+
+async function fetchLiveAllQuizzes(filterStatus?: QuizStatus): Promise<Quiz[]> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return [];
+
+  let query = supabase
+    .from('quizzes')
+    .select(QUIZ_QUERY_SELECT)
+    .order('created_at', { ascending: false });
+
+  if (filterStatus) {
+    query = query.eq('status', filterStatus);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(`Supabase getAllQuizzes error: ${error.message}`);
+  }
+  if (!data) return [];
+
+  for (const quiz of data as any[]) {
+    sortQuizQuestionsAndSections(quiz);
+  }
+  return (data as any[]).map(normalizeQuizRecord);
+}
+
+/**
+ * Admin Data Access Layer (Local & Private Server-Side Only)
+ * Deterministic: When Supabase is ready, uses Supabase. Otherwise uses local disk-synced store.
+ */
+export async function getAllQuizzes(filterStatus?: QuizStatus): Promise<Quiz[]> {
+  const isLive = await isSupabaseDatabaseReady();
+  if (isLive) {
+    return fetchLiveAllQuizzes(filterStatus);
+  }
+
+  const list = filterStatus
+    ? mockStore.getQuizzes().filter(q => q.status === filterStatus)
+    : mockStore.getQuizzes();
   return list.map(normalizeQuizRecord);
+}
+
+async function fetchLiveQuizById(id: string): Promise<Quiz | null> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('quizzes')
+    .select(QUIZ_QUERY_SELECT)
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Supabase getQuizById error: ${error.message}`);
+  }
+  if (!data) return null;
+
+  sortQuizQuestionsAndSections(data);
+  return normalizeQuizRecord(data);
 }
 
 export async function getQuizById(id: string): Promise<Quiz | null> {
   const isLive = await isSupabaseDatabaseReady();
   if (isLive) {
-    const supabase = getSupabaseAdminClient();
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('quizzes')
-        .select(`
-          *,
-          theme:themes(*),
-          sections:sections(*),
-          questions:questions(
-            *,
-            options:options(*)
-          )
-        `)
-        .eq('id', id)
-        .maybeSingle();
-
-      if (error) {
-        throw new Error(`Supabase getQuizById error: ${error.message}`);
-      }
-
-      if (data) {
-        if (data.questions && Array.isArray(data.questions)) {
-          data.questions.sort((a: any, b: any) => (a.question_order || 0) - (b.question_order || 0));
-          for (const q of data.questions) {
-            if (q.options && Array.isArray(q.options)) {
-              q.options.sort((a: any, b: any) => (a.option_order || 0) - (b.option_order || 0));
-            }
-          }
-        }
-        if (data.sections && Array.isArray(data.sections)) {
-          data.sections.sort((a: any, b: any) => (a.section_order || 0) - (b.section_order || 0));
-        }
-        return normalizeQuizRecord(data);
-      }
-      return null;
-    }
+    return fetchLiveQuizById(id);
   }
 
   const mockQuiz = mockStore.getQuizById(id);
   return mockQuiz ? normalizeQuizRecord(mockQuiz) : null;
 }
 
+async function fetchLiveQuizBySlug(slug: string): Promise<Quiz | null> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('quizzes')
+    .select(QUIZ_QUERY_SELECT)
+    .eq('slug', slug)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Supabase getQuizBySlug error: ${error.message}`);
+  }
+  if (!data) return null;
+
+  sortQuizQuestionsAndSections(data);
+  return normalizeQuizRecord(data);
+}
+
 export async function getQuizBySlug(slug: string): Promise<Quiz | null> {
   const isLive = await isSupabaseDatabaseReady();
   if (isLive) {
-    const supabase = getSupabaseAdminClient();
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('quizzes')
-        .select(`
-          *,
-          theme:themes(*),
-          sections:sections(*),
-          questions:questions(
-            *,
-            options:options(*)
-          )
-        `)
-        .eq('slug', slug)
-        .maybeSingle();
-
-      if (error) {
-        throw new Error(`Supabase getQuizBySlug error: ${error.message}`);
-      }
-
-      if (data) {
-        if (data.questions && Array.isArray(data.questions)) {
-          data.questions.sort((a: any, b: any) => (a.question_order || 0) - (b.question_order || 0));
-          for (const q of data.questions) {
-            if (q.options && Array.isArray(q.options)) {
-              q.options.sort((a: any, b: any) => (a.option_order || 0) - (b.option_order || 0));
-            }
-          }
-        }
-        if (data.sections && Array.isArray(data.sections)) {
-          data.sections.sort((a: any, b: any) => (a.section_order || 0) - (b.section_order || 0));
-        }
-        return normalizeQuizRecord(data);
-      }
-      return null;
-    }
+    return fetchLiveQuizBySlug(slug);
   }
 
   const mockQuiz = mockStore.getQuizBySlug(slug);
   return mockQuiz ? normalizeQuizRecord(mockQuiz) : null;
+}
+
+async function upsertLiveQuizRecord(
+  supabase: any,
+  quiz: Partial<Quiz> & { title: string; slug: string },
+  quizId: string,
+  rawStartAt: string | null,
+  rawEndAt: string | null,
+  settingsToSave: any
+): Promise<void> {
+  const basePayload: Record<string, any> = {
+    id: quizId,
+    title: quiz.title,
+    slug: quiz.slug,
+    description: quiz.description ?? null,
+    cover_image: quiz.cover_image ?? null,
+    status: quiz.status || 'draft',
+    theme_id: quiz.theme_id && UUID_REGEX.test(quiz.theme_id) ? quiz.theme_id : null,
+    settings: settingsToSave,
+    instructions: (quiz as any).instructions ?? (quiz.settings as any)?.instructions ?? null,
+    updated_at: new Date().toISOString()
+  };
+
+  let { error: quizError } = await supabase
+    .from('quizzes')
+    .upsert({
+      ...basePayload,
+      start_at: rawStartAt,
+      end_at: rawEndAt
+    });
+
+  if (
+    quizError &&
+    (quizError.message?.includes('start_at') ||
+     quizError.message?.includes('end_at') ||
+     quizError.message?.includes('schema cache') ||
+     quizError.code === '42703' ||
+     quizError.code === 'PGRST204')
+  ) {
+    const fallback = await supabase
+      .from('quizzes')
+      .upsert(basePayload);
+    quizError = fallback.error;
+  }
+
+  if (quizError) {
+    throw new Error(`Supabase saveQuiz error: ${quizError.message}`);
+  }
+}
+
+async function upsertLiveQuizSections(supabase: any, quizId: string, sections: QuizSection[]): Promise<void> {
+  const sectionIds: string[] = [];
+  const sectionsToUpsert = sections.map((sec, idx) => {
+    const secId = ensureUuid(sec.id);
+    sectionIds.push(secId);
+    return {
+      id: secId,
+      quiz_id: quizId,
+      title: sec.title,
+      description: sec.description ?? null,
+      section_order: sec.section_order ?? (idx + 1)
+    };
+  });
+
+  if (sectionIds.length > 0) {
+    await supabase
+      .from('sections')
+      .delete()
+      .eq('quiz_id', quizId)
+      .not('id', 'in', `(${sectionIds.join(',')})`);
+  } else {
+    await supabase.from('sections').delete().eq('quiz_id', quizId);
+  }
+
+  if (sectionsToUpsert.length > 0) {
+    const { error: secError } = await supabase.from('sections').upsert(sectionsToUpsert);
+    if (secError) throw new Error(`Supabase sections error: ${secError.message}`);
+  }
+}
+
+async function upsertLiveQuizQuestionsAndOptions(supabase: any, quizId: string, questions: Question[]): Promise<void> {
+  const questionIds: string[] = [];
+  const questionsToUpsert: any[] = [];
+  const optionsPerQuestion: { questionId: string; options: any[] }[] = [];
+
+  for (let qIdx = 0; qIdx < questions.length; qIdx++) {
+    const q = questions[qIdx];
+    const qId = ensureUuid(q.id);
+    questionIds.push(qId);
+
+    questionsToUpsert.push({
+      id: qId,
+      quiz_id: quizId,
+      section_id: q.section_id && UUID_REGEX.test(q.section_id) ? q.section_id : null,
+      question_text: q.question_text,
+      question_description: q.question_description ?? null,
+      question_type: q.question_type,
+      question_image: q.question_image ?? null,
+      marks: q.marks ?? 5,
+      negative_marks: q.negative_marks ?? 0,
+      required: q.required ?? true,
+      question_order: q.question_order ?? (qIdx + 1),
+      section_title: q.section_title ?? null,
+      section_description: q.section_description ?? null,
+      time_limit_seconds: q.time_limit_seconds ?? null,
+      scoring_method: q.scoring_method ?? 'all_or_nothing',
+      accepted_answers: q.accepted_answers ?? [],
+      case_sensitive: q.case_sensitive ?? false,
+      trim_whitespace: q.trim_whitespace ?? true,
+      normalize_spaces: q.normalize_spaces ?? true,
+      updated_at: new Date().toISOString()
+    });
+
+    if (q.options && Array.isArray(q.options)) {
+      const optList = q.options.map((opt, optIdx) => ({
+        id: ensureUuid(opt.id),
+        question_id: qId,
+        option_text: opt.option_text,
+        option_image: opt.option_image ?? null,
+        is_correct: Boolean(opt.is_correct),
+        option_order: opt.option_order ?? (optIdx + 1)
+      }));
+      optionsPerQuestion.push({ questionId: qId, options: optList });
+    }
+  }
+
+  if (questionIds.length > 0) {
+    await supabase
+      .from('questions')
+      .delete()
+      .eq('quiz_id', quizId)
+      .not('id', 'in', `(${questionIds.join(',')})`);
+  } else {
+    await supabase.from('questions').delete().eq('quiz_id', quizId);
+  }
+
+  if (questionsToUpsert.length > 0) {
+    const { error: qError } = await supabase.from('questions').upsert(questionsToUpsert);
+    if (qError) {
+      throw new Error(`Supabase questions error: ${qError.message}`);
+    }
+  }
+
+  for (const { questionId, options } of optionsPerQuestion) {
+    const optIds = options.map(o => o.id);
+    if (optIds.length > 0) {
+      await supabase
+        .from('options')
+        .delete()
+        .eq('question_id', questionId)
+        .not('id', 'in', `(${optIds.join(',')})`);
+
+      const { error: optError } = await supabase.from('options').upsert(options);
+      if (optError) throw new Error(`Supabase options error: ${optError.message}`);
+    } else {
+      await supabase.from('options').delete().eq('question_id', questionId);
+    }
+  }
+}
+
+async function saveLiveQuiz(
+  quiz: Partial<Quiz> & { title: string; slug: string },
+  rawStartAt: string | null,
+  rawEndAt: string | null,
+  settingsToSave: any
+): Promise<Quiz | null> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return null;
+
+  const quizId = ensureUuid(quiz.id);
+  await upsertLiveQuizRecord(supabase, quiz, quizId, rawStartAt, rawEndAt, settingsToSave);
+
+  if (quiz.sections && Array.isArray(quiz.sections)) {
+    await upsertLiveQuizSections(supabase, quizId, quiz.sections);
+  }
+
+  if (quiz.questions && Array.isArray(quiz.questions)) {
+    await upsertLiveQuizQuestionsAndOptions(supabase, quizId, quiz.questions);
+  }
+
+  return getQuizById(quizId);
 }
 
 export async function saveQuiz(quiz: Partial<Quiz> & { title: string; slug: string }): Promise<Quiz> {
@@ -215,171 +379,9 @@ export async function saveQuiz(quiz: Partial<Quiz> & { title: string; slug: stri
 
   const isLive = await isSupabaseDatabaseReady();
   if (isLive) {
-    const supabase = getSupabaseAdminClient();
-    if (supabase) {
-      const quizId = ensureUuid(quiz.id);
-
-      // 1. Upsert Quiz record
-      const basePayload: Record<string, any> = {
-        id: quizId,
-        title: quiz.title,
-        slug: quiz.slug,
-        description: quiz.description ?? null,
-        cover_image: quiz.cover_image ?? null,
-        status: quiz.status || 'draft',
-        theme_id: quiz.theme_id && UUID_REGEX.test(quiz.theme_id) ? quiz.theme_id : null,
-        settings: settingsToSave,
-        instructions: (quiz as any).instructions ?? (quiz.settings as any)?.instructions ?? null,
-        updated_at: new Date().toISOString()
-      };
-
-      let { error: quizError } = await supabase
-        .from('quizzes')
-        .upsert({
-          ...basePayload,
-          start_at: rawStartAt,
-          end_at: rawEndAt
-        });
-
-      if (
-        quizError &&
-        (quizError.message?.includes('start_at') ||
-         quizError.message?.includes('end_at') ||
-         quizError.message?.includes('schema cache') ||
-         quizError.code === '42703' ||
-         quizError.code === 'PGRST204')
-      ) {
-        const fallback = await supabase
-          .from('quizzes')
-          .upsert(basePayload);
-        quizError = fallback.error;
-      }
-
-      if (quizError) {
-        throw new Error(`Supabase saveQuiz error: ${quizError.message}`);
-      }
-
-      // 2. Persist Sections if provided
-      if (quiz.sections && Array.isArray(quiz.sections)) {
-        const sectionIds: string[] = [];
-        const sectionsToUpsert = quiz.sections.map((sec, idx) => {
-          const secId = ensureUuid(sec.id);
-          sectionIds.push(secId);
-          return {
-            id: secId,
-            quiz_id: quizId,
-            title: sec.title,
-            description: sec.description ?? null,
-            section_order: sec.section_order ?? (idx + 1)
-          };
-        });
-
-        // Delete removed sections
-        if (sectionIds.length > 0) {
-          await supabase
-            .from('sections')
-            .delete()
-            .eq('quiz_id', quizId)
-            .not('id', 'in', `(${sectionIds.join(',')})`);
-        } else {
-          await supabase.from('sections').delete().eq('quiz_id', quizId);
-        }
-
-        if (sectionsToUpsert.length > 0) {
-          const { error: secError } = await supabase.from('sections').upsert(sectionsToUpsert);
-          if (secError) throw new Error(`Supabase sections error: ${secError.message}`);
-        }
-      }
-
-      // 3. Persist Questions and Options if provided
-      if (quiz.questions && Array.isArray(quiz.questions)) {
-        const questionIds: string[] = [];
-        const questionsToUpsert: any[] = [];
-        const optionsPerQuestion: { questionId: string; options: any[] }[] = [];
-
-        for (let qIdx = 0; qIdx < quiz.questions.length; qIdx++) {
-          const q = quiz.questions[qIdx];
-          const qId = ensureUuid(q.id);
-          questionIds.push(qId);
-
-          questionsToUpsert.push({
-            id: qId,
-            quiz_id: quizId,
-            section_id: q.section_id && UUID_REGEX.test(q.section_id) ? q.section_id : null,
-            question_text: q.question_text,
-            question_description: q.question_description ?? null,
-            question_type: q.question_type,
-            question_image: q.question_image ?? null,
-            marks: q.marks ?? 5,
-            negative_marks: q.negative_marks ?? 0,
-            required: q.required ?? true,
-            question_order: q.question_order ?? (qIdx + 1),
-            section_title: q.section_title ?? null,
-            section_description: q.section_description ?? null,
-            time_limit_seconds: q.time_limit_seconds ?? null,
-            scoring_method: q.scoring_method ?? 'all_or_nothing',
-            accepted_answers: q.accepted_answers ?? [],
-            case_sensitive: q.case_sensitive ?? false,
-            trim_whitespace: q.trim_whitespace ?? true,
-            normalize_spaces: q.normalize_spaces ?? true,
-            updated_at: new Date().toISOString()
-          });
-
-          if (q.options && Array.isArray(q.options)) {
-            const optList = q.options.map((opt, optIdx) => ({
-              id: ensureUuid(opt.id),
-              question_id: qId,
-              option_text: opt.option_text,
-              option_image: opt.option_image ?? null,
-              is_correct: Boolean(opt.is_correct),
-              option_order: opt.option_order ?? (optIdx + 1)
-            }));
-            optionsPerQuestion.push({ questionId: qId, options: optList });
-          }
-        }
-
-        // Delete removed questions
-        if (questionIds.length > 0) {
-          await supabase
-            .from('questions')
-            .delete()
-            .eq('quiz_id', quizId)
-            .not('id', 'in', `(${questionIds.join(',')})`);
-        } else {
-          await supabase.from('questions').delete().eq('quiz_id', quizId);
-        }
-
-        // Upsert questions
-        if (questionsToUpsert.length > 0) {
-          const { error: qError } = await supabase.from('questions').upsert(questionsToUpsert);
-          if (qError) {
-            throw new Error(`Supabase questions error: ${qError.message}`);
-          }
-        }
-
-        // Handle options per question
-        for (const { questionId, options } of optionsPerQuestion) {
-          const optIds = options.map(o => o.id);
-          if (optIds.length > 0) {
-            await supabase
-              .from('options')
-              .delete()
-              .eq('question_id', questionId)
-              .not('id', 'in', `(${optIds.join(',')})`);
-
-            const { error: optError } = await supabase.from('options').upsert(options);
-            if (optError) throw new Error(`Supabase options error: ${optError.message}`);
-          } else {
-            await supabase.from('options').delete().eq('question_id', questionId);
-          }
-        }
-      }
-
-      // Re-fetch and return full populated quiz
-      const fullSaved = await getQuizById(quizId);
-      if (fullSaved) {
-        return fullSaved;
-      }
+    const fullSaved = await saveLiveQuiz(quiz, rawStartAt, rawEndAt, settingsToSave);
+    if (fullSaved) {
+      return fullSaved;
     }
   }
 
@@ -599,16 +601,15 @@ export async function exportQuizToJson(quizId: string): Promise<QuizJsonImportFo
 /**
  * Retrieves paginated participant responses with server-side filtering, search, and summary metrics.
  */
-export async function getResponsesPaginated(filters: ResponsesFilterParams = {}): Promise<PaginatedResponsesResult> {
-  const isLive = await isSupabaseDatabaseReady();
-  let submissions: Submission[] = [];
-  let quizzes: Quiz[] = [];
-
+async function fetchSubmissionsAndQuizzes(
+  filters: ResponsesFilterParams,
+  isLive: boolean
+): Promise<{ submissions: Submission[]; quizzes: Quiz[] }> {
   if (isLive) {
     const supabase = getSupabaseAdminClient();
     if (supabase) {
-      let query = supabase.from('submissions').select('*').order(filters.sortBy || 'submitted_at', { 
-        ascending: filters.sortOrder === 'asc' 
+      let query = supabase.from('submissions').select('*').order(filters.sortBy || 'submitted_at', {
+        ascending: filters.sortOrder === 'asc'
       });
 
       if (filters.quizId) {
@@ -636,93 +637,95 @@ export async function getResponsesPaginated(filters: ResponsesFilterParams = {})
       if (error) {
         throw new Error(`Supabase getResponsesPaginated error: ${error.message}`);
       }
-      submissions = (data as Submission[]) || [];
-      quizzes = await getAllQuizzes();
+      const submissions = (data as Submission[]) || [];
+      const quizzes = await getAllQuizzes();
+      return { submissions, quizzes };
     }
-  } else {
-    submissions = mockStore.getSubmissions();
-    quizzes = mockStore.getQuizzes();
   }
 
-  const quizMap = new Map<string, Quiz>(quizzes.map(q => [q.id, q]));
+  return {
+    submissions: mockStore.getSubmissions(),
+    quizzes: mockStore.getQuizzes()
+  };
+}
 
-  // Transform to ResponseListItem
-  let items: ResponseListItem[] = submissions.map(sub => {
-    const quiz = quizMap.get(sub.quiz_id);
-    return {
-      id: sub.id,
-      quiz_id: sub.quiz_id,
-      quiz_title: quiz?.title || 'Unknown Quiz',
-      quiz_slug: quiz?.slug,
-      participant_name: sub.participant_name,
-      participant_email: sub.participant_email || null,
-      participant_data: sub.participant_data || null,
-      score: Number(sub.score) || 0,
-      total_possible_marks: Number(sub.total_possible_marks) || 0,
-      percentage: Number(sub.percentage) || 0,
-      passed: Boolean(sub.passed),
-      submitted_at: sub.submitted_at,
-      attempt_id: sub.attempt_id,
-      time_taken_seconds: sub.time_taken_seconds
-    };
+function toResponseListItem(sub: Submission, quizMap: Map<string, Quiz>): ResponseListItem {
+  const quiz = quizMap.get(sub.quiz_id);
+  return {
+    id: sub.id,
+    quiz_id: sub.quiz_id,
+    quiz_title: quiz?.title || 'Unknown Quiz',
+    quiz_slug: quiz?.slug,
+    participant_name: sub.participant_name,
+    participant_email: sub.participant_email || null,
+    participant_data: sub.participant_data || null,
+    score: Number(sub.score) || 0,
+    total_possible_marks: Number(sub.total_possible_marks) || 0,
+    percentage: Number(sub.percentage) || 0,
+    passed: Boolean(sub.passed),
+    submitted_at: sub.submitted_at,
+    attempt_id: sub.attempt_id,
+    time_taken_seconds: sub.time_taken_seconds
+  };
+}
+
+function filterMockResponseItems(items: ResponseListItem[], filters: ResponsesFilterParams): ResponseListItem[] {
+  let filtered = items;
+  if (filters.quizId) {
+    filtered = filtered.filter(i => i.quiz_id === filters.quizId);
+  }
+  if (filters.status === 'passed') {
+    filtered = filtered.filter(i => i.passed);
+  } else if (filters.status === 'failed') {
+    filtered = filtered.filter(i => !i.passed);
+  }
+  if (filters.minScore !== undefined && filters.minScore !== null) {
+    filtered = filtered.filter(i => i.score >= filters.minScore!);
+  }
+  if (filters.maxScore !== undefined && filters.maxScore !== null) {
+    filtered = filtered.filter(i => i.score <= filters.maxScore!);
+  }
+  if (filters.startDate) {
+    filtered = filtered.filter(i => new Date(i.submitted_at) >= new Date(filters.startDate!));
+  }
+  if (filters.endDate) {
+    filtered = filtered.filter(i => new Date(i.submitted_at) <= new Date(filters.endDate!));
+  }
+  return filtered;
+}
+
+function searchResponseItems(items: ResponseListItem[], search?: string): ResponseListItem[] {
+  if (!search || !search.trim()) return items;
+  const query = search.toLowerCase().trim();
+  return items.filter(i => {
+    const nameMatch = i.participant_name.toLowerCase().includes(query);
+    const emailMatch = i.participant_email?.toLowerCase().includes(query) ?? false;
+    const quizMatch = i.quiz_title.toLowerCase().includes(query);
+    const clubMatch = (i.participant_data?.club_name as string)?.toLowerCase().includes(query) ?? false;
+    return nameMatch || emailMatch || quizMatch || clubMatch;
   });
+}
 
-  // Local/mock filtering for criteria
-  if (!isLive) {
-    if (filters.quizId) {
-      items = items.filter(i => i.quiz_id === filters.quizId);
-    }
-    if (filters.status === 'passed') {
-      items = items.filter(i => i.passed);
-    } else if (filters.status === 'failed') {
-      items = items.filter(i => !i.passed);
-    }
-    if (filters.minScore !== undefined && filters.minScore !== null) {
-      items = items.filter(i => i.score >= filters.minScore!);
-    }
-    if (filters.maxScore !== undefined && filters.maxScore !== null) {
-      items = items.filter(i => i.score <= filters.maxScore!);
-    }
-    if (filters.startDate) {
-      items = items.filter(i => new Date(i.submitted_at) >= new Date(filters.startDate!));
-    }
-    if (filters.endDate) {
-      items = items.filter(i => new Date(i.submitted_at) <= new Date(filters.endDate!));
-    }
-  }
-
-  // Universal text search (participant name, email, quiz title, or club name)
-  if (filters.search && filters.search.trim()) {
-    const query = filters.search.toLowerCase().trim();
-    items = items.filter(i => {
-      const nameMatch = i.participant_name.toLowerCase().includes(query);
-      const emailMatch = i.participant_email?.toLowerCase().includes(query) ?? false;
-      const quizMatch = i.quiz_title.toLowerCase().includes(query);
-      const clubMatch = (i.participant_data?.club_name as string)?.toLowerCase().includes(query) ?? false;
-      return nameMatch || emailMatch || quizMatch || clubMatch;
-    });
-  }
-
-  // Sorting
-  const sortBy = filters.sortBy || 'submitted_at';
-  const sortOrder = filters.sortOrder === 'asc' ? 1 : -1;
+function sortResponseItems(items: ResponseListItem[], sortBy = 'submitted_at', sortOrder = 'desc'): void {
+  const mult = sortOrder === 'asc' ? 1 : -1;
   items.sort((a, b) => {
     if (sortBy === 'submitted_at') {
-      return (new Date(a.submitted_at).getTime() - new Date(b.submitted_at).getTime()) * sortOrder;
+      return (new Date(a.submitted_at).getTime() - new Date(b.submitted_at).getTime()) * mult;
     }
     if (sortBy === 'score') {
-      return (a.score - b.score) * sortOrder;
+      return (a.score - b.score) * mult;
     }
     if (sortBy === 'percentage') {
-      return (a.percentage - b.percentage) * sortOrder;
+      return (a.percentage - b.percentage) * mult;
     }
     if (sortBy === 'participant_name') {
-      return a.participant_name.localeCompare(b.participant_name) * sortOrder;
+      return a.participant_name.localeCompare(b.participant_name) * mult;
     }
     return 0;
   });
+}
 
-  // Summary calculation over the filtered items
+function calculateResponsesSummary(items: ResponseListItem[]): ResponsesSummary {
   const total = items.length;
   let totalScoreSum = 0;
   let totalPercentageSum = 0;
@@ -739,7 +742,7 @@ export async function getResponsesPaginated(filters: ResponsesFilterParams = {})
   }
 
   const failCount = total - passCount;
-  const summary: ResponsesSummary = {
+  return {
     totalResponses: total,
     averageScore: total > 0 ? Math.round((totalScoreSum / total) * 10) / 10 : 0,
     averagePercentage: total > 0 ? Math.round((totalPercentageSum / total) * 10) / 10 : 0,
@@ -749,8 +752,27 @@ export async function getResponsesPaginated(filters: ResponsesFilterParams = {})
     highestScore,
     lowestScore
   };
+}
 
-  // Pagination (clamped to prevent memory/resource abuse)
+/**
+ * Retrieves paginated participant responses with server-side filtering, search, and summary metrics.
+ */
+export async function getResponsesPaginated(filters: ResponsesFilterParams = {}): Promise<PaginatedResponsesResult> {
+  const isLive = await isSupabaseDatabaseReady();
+  const { submissions, quizzes } = await fetchSubmissionsAndQuizzes(filters, isLive);
+
+  const quizMap = new Map<string, Quiz>(quizzes.map(q => [q.id, q]));
+  let items: ResponseListItem[] = submissions.map(sub => toResponseListItem(sub, quizMap));
+
+  if (!isLive) {
+    items = filterMockResponseItems(items, filters);
+  }
+
+  items = searchResponseItems(items, filters.search);
+  sortResponseItems(items, filters.sortBy, filters.sortOrder);
+  const summary = calculateResponsesSummary(items);
+
+  const total = items.length;
   const page = Math.max(1, Number(filters.page) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize) || 25));
   const totalPages = Math.ceil(total / pageSize) || 1;

@@ -10,80 +10,53 @@ import { getSupabasePublicClient } from '@quizmania/shared';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
-  // 1. CSRF Defense
-  const csrf = verifyCsrfOrigin(request);
-  if (!csrf.valid) {
-    return NextResponse.json(
-      { success: false, error: csrf.reason || 'CSRF validation failed' },
-      { status: 403 }
-    );
-  }
-
-  // 2. Extract refresh token from cookie or body
-  let refreshToken: string | null = null;
+async function extractRefreshTokenFromRequest(request: Request): Promise<string | null> {
   const cookieHeader = request.headers.get('cookie') || '';
   const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_REFRESH_COOKIE}=([^;]+)`));
   if (match) {
-    refreshToken = decodeURIComponent(match[1]);
+    return decodeURIComponent(match[1]);
   }
 
-  if (!refreshToken) {
-    try {
-      const body = await request.json();
-      if (body.refreshToken) {
-        refreshToken = body.refreshToken.trim();
-      }
-    } catch {
-      // Body parsing optional
+  try {
+    const body = await request.json();
+    if (body.refreshToken) {
+      return body.refreshToken.trim();
     }
+  } catch {
+    // Body parsing optional
   }
 
-  if (!refreshToken) {
-    return NextResponse.json(
-      { success: false, error: 'No refresh token provided' },
-      { status: 401 }
-    );
+  return null;
+}
+
+function handleTestRefresh(refreshToken: string): NextResponse {
+  if (refreshToken === 'valid-refresh-token') {
+    const response = NextResponse.json({
+      success: true,
+      user: {
+        id: '00000000-0000-4000-a000-000000000001',
+        email: 'admin@quizmania.dev',
+        role: 'admin',
+      },
+    });
+
+    attachSessionCookies(response, {
+      accessToken: 'test-admin-token',
+      refreshToken: 'valid-refresh-token',
+      expiresIn: 3600,
+    });
+
+    return response;
   }
 
-  // 3. Automated Test & Mock Handling (ONLY in test runner, NEVER in production)
-  const isTestEnvironment = (process.env.NODE_ENV === 'test' || process.env.ENABLE_TEST_AUTH === 'true') && process.env.NODE_ENV !== 'production';
-  if (isTestEnvironment) {
-    if (refreshToken === 'valid-refresh-token') {
-      const response = NextResponse.json({
-        success: true,
-        user: {
-          id: '00000000-0000-4000-a000-000000000001',
-          email: 'admin@quizmania.dev',
-          role: 'admin',
-        },
-      });
+  const unauthResponse = NextResponse.json(
+    { success: false, error: 'Invalid refresh token' },
+    { status: 401 }
+  );
+  return clearSessionCookies(unauthResponse);
+}
 
-      attachSessionCookies(response, {
-        accessToken: 'test-admin-token',
-        refreshToken: 'valid-refresh-token',
-        expiresIn: 3600,
-      });
-
-      return response;
-    }
-
-    const unauthResponse = NextResponse.json(
-      { success: false, error: 'Invalid refresh token' },
-      { status: 401 }
-    );
-    return clearSessionCookies(unauthResponse);
-  }
-
-  // 4. Supabase Session Refresh
-  const supabase = getSupabasePublicClient();
-  if (!supabase) {
-    return NextResponse.json(
-      { success: false, error: 'Authentication service unavailable' },
-      { status: 500 }
-    );
-  }
-
+async function handleSupabaseRefresh(supabase: any, refreshToken: string): Promise<NextResponse> {
   try {
     const { data, error } = await supabase.auth.refreshSession({
       refresh_token: refreshToken,
@@ -97,7 +70,6 @@ export async function POST(request: Request) {
       return clearSessionCookies(unauthResponse);
     }
 
-    // 5. Re-verify explicit admin authorization
     const authCheck = await verifyAdminAuthorization(
       data.user.id,
       data.user.email || ''
@@ -111,7 +83,6 @@ export async function POST(request: Request) {
       return clearSessionCookies(forbiddenResponse);
     }
 
-    // 6. Issue refreshed session cookies
     const response = NextResponse.json({
       success: true,
       user: {
@@ -135,4 +106,41 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+export async function POST(request: Request) {
+  // 1. CSRF Defense
+  const csrf = verifyCsrfOrigin(request);
+  if (!csrf.valid) {
+    return NextResponse.json(
+      { success: false, error: csrf.reason || 'CSRF validation failed' },
+      { status: 403 }
+    );
+  }
+
+  // 2. Extract refresh token from cookie or body
+  const refreshToken = await extractRefreshTokenFromRequest(request);
+  if (!refreshToken) {
+    return NextResponse.json(
+      { success: false, error: 'No refresh token provided' },
+      { status: 401 }
+    );
+  }
+
+  // 3. Automated Test & Mock Handling (ONLY in test runner, NEVER in production)
+  const isTestEnvironment = (process.env.NODE_ENV === 'test' || process.env.ENABLE_TEST_AUTH === 'true') && process.env.NODE_ENV !== 'production';
+  if (isTestEnvironment) {
+    return handleTestRefresh(refreshToken);
+  }
+
+  // 4. Supabase Session Refresh
+  const supabase = getSupabasePublicClient();
+  if (!supabase) {
+    return NextResponse.json(
+      { success: false, error: 'Authentication service unavailable' },
+      { status: 500 }
+    );
+  }
+
+  return handleSupabaseRefresh(supabase, refreshToken);
 }

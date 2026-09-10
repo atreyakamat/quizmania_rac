@@ -74,6 +74,61 @@ function isUnavailableError(err: string): boolean {
 /**
  * Executes a single chunk with retry logic (retry once on malformed response).
  */
+function parseChunkQuestions(parsed: any, chunkIndex: number): any[] | null {
+  if (Array.isArray(parsed.questions)) {
+    return parsed.questions;
+  }
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+  if (chunkIndex === 1 && parsed.title) {
+    return [];
+  }
+  return null;
+}
+
+async function tryExecuteChunkGeneration(
+  prompt: string,
+  systemPrompt: string,
+  config: OllamaConfig,
+  chunkIndex: number
+): Promise<{ success: boolean; result?: ChunkResult; error?: string }> {
+  const genResult = await generateWithOllama(prompt, systemPrompt, config);
+  if (!genResult.success || !genResult.rawResponse) {
+    return { success: false, error: genResult.error || 'Ollama connection failed or timed out' };
+  }
+
+  const jsonStr = extractJsonFromOllamaResponse(genResult.rawResponse);
+  if (!jsonStr) {
+    return { success: false, error: 'Could not extract valid JSON from AI response' };
+  }
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    const questions = parseChunkQuestions(parsed, chunkIndex);
+    if (!questions) {
+      return { success: false, error: 'AI response did not contain a valid questions list' };
+    }
+
+    return {
+      success: true,
+      result: {
+        title: parsed.title,
+        description: parsed.description,
+        questions,
+        settings: parsed.settings,
+        sections: parsed.sections,
+        rawResponse: genResult.rawResponse,
+      }
+    };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'JSON parse error' };
+  }
+}
+
+/**
+ * Executes a single chunk with retry logic (retry once on malformed response).
+ */
 async function processChunkWithRetry(
   prompt: string,
   systemPrompt: string,
@@ -82,50 +137,13 @@ async function processChunkWithRetry(
   totalChunks: number
 ): Promise<ChunkResult> {
   let lastError = '';
-  let lastRawResponse = '';
 
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const genResult = await generateWithOllama(prompt, systemPrompt, config);
-    if (!genResult.success || !genResult.rawResponse) {
-      lastError = genResult.error || 'Ollama connection failed or timed out';
-      continue;
+    const executed = await tryExecuteChunkGeneration(prompt, systemPrompt, config, chunkIndex);
+    if (executed.success && executed.result) {
+      return executed.result;
     }
-
-    lastRawResponse = genResult.rawResponse;
-    const jsonStr = extractJsonFromOllamaResponse(genResult.rawResponse);
-    if (!jsonStr) {
-      lastError = 'Could not extract valid JSON from AI response';
-      continue;
-    }
-
-    try {
-      const parsed = JSON.parse(jsonStr);
-      let questions: any[] = [];
-
-      if (Array.isArray(parsed.questions)) {
-        questions = parsed.questions;
-      } else if (Array.isArray(parsed)) {
-        questions = parsed;
-      } else if (chunkIndex === 1 && parsed.title) {
-        // First chunk might have metadata even if empty questions
-        questions = [];
-      } else {
-        lastError = 'AI response did not contain a valid questions list';
-        continue;
-      }
-
-      return {
-        title: parsed.title,
-        description: parsed.description,
-        questions,
-        settings: parsed.settings,
-        sections: parsed.sections,
-        rawResponse: genResult.rawResponse,
-      };
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : 'JSON parse error';
-      continue;
-    }
+    lastError = executed.error || 'Unknown chunk execution error';
   }
 
   if (isUnavailableError(lastError)) {
@@ -133,6 +151,59 @@ async function processChunkWithRetry(
   }
 
   throw new Error('AI returned invalid quiz JSON. Please try again or edit the input.');
+}
+
+function resolveMergedTitle(chunkResults: ChunkResult[], userTitle?: string): string {
+  let mergedTitle = userTitle?.trim() || '';
+  if (!mergedTitle) {
+    for (const cr of chunkResults) {
+      if (cr.title && !isGenericTitle(cr.title)) {
+        mergedTitle = cr.title.trim();
+        break;
+      }
+    }
+    if (!mergedTitle && chunkResults[0]?.title?.trim()) {
+      mergedTitle = chunkResults[0].title.trim();
+    }
+  }
+  return mergedTitle || 'Generated Quiz';
+}
+
+function resolveMergedDescription(chunkResults: ChunkResult[], userDescription?: string): string {
+  let mergedDescription = userDescription?.trim() || '';
+  if (!mergedDescription) {
+    for (const cr of chunkResults) {
+      if (cr.description?.trim()) {
+        mergedDescription = cr.description.trim();
+        break;
+      }
+    }
+  }
+  return mergedDescription;
+}
+
+function resolveMergedSections(chunkResults: ChunkResult[]): any[] {
+  const sectionMap = new Map<string, any>();
+  for (const cr of chunkResults) {
+    if (Array.isArray(cr.sections)) {
+      for (const sec of cr.sections) {
+        if (sec && sec.title && !sectionMap.has(sec.title.trim().toLowerCase())) {
+          sectionMap.set(sec.title.trim().toLowerCase(), sec);
+        }
+      }
+    }
+  }
+  return Array.from(sectionMap.values());
+}
+
+function resolveMergedSettings(chunkResults: ChunkResult[]): any {
+  let mergedSettings: any = {};
+  for (const cr of chunkResults) {
+    if (cr.settings && typeof cr.settings === 'object') {
+      mergedSettings = { ...mergedSettings, ...cr.settings };
+    }
+  }
+  return mergedSettings;
 }
 
 /**
@@ -158,69 +229,93 @@ export function mergeChunkResults(
     }
   });
 
-  // 3. Deterministic Title resolution
-  let mergedTitle = userTitle?.trim() || '';
-  if (!mergedTitle) {
-    for (const cr of chunkResults) {
-      if (cr.title && !isGenericTitle(cr.title)) {
-        mergedTitle = cr.title.trim();
-        break;
-      }
-    }
-    if (!mergedTitle && chunkResults[0]?.title?.trim()) {
-      mergedTitle = chunkResults[0].title.trim();
-    }
-  }
-  if (!mergedTitle) {
-    mergedTitle = 'Generated Quiz';
-  }
-
-  // 4. Deterministic Description resolution
-  let mergedDescription = userDescription?.trim() || '';
-  if (!mergedDescription) {
-    for (const cr of chunkResults) {
-      if (cr.description?.trim()) {
-        mergedDescription = cr.description.trim();
-        break;
-      }
-    }
-  }
-
-  // 5. Deterministic Sections resolution
-  const sectionMap = new Map<string, any>();
-  for (const cr of chunkResults) {
-    if (Array.isArray(cr.sections)) {
-      for (const sec of cr.sections) {
-        if (sec && sec.title && !sectionMap.has(sec.title.trim().toLowerCase())) {
-          sectionMap.set(sec.title.trim().toLowerCase(), sec);
-        }
-      }
-    }
-  }
-  const mergedSections = Array.from(sectionMap.values());
-
-  // 6. Deterministic Settings resolution
-  let mergedSettings: any = {};
-  for (const cr of chunkResults) {
-    if (cr.settings && typeof cr.settings === 'object') {
-      mergedSettings = { ...mergedSettings, ...cr.settings };
-    }
-  }
-
   const mergedQuiz: any = {
-    title: mergedTitle,
-    description: mergedDescription,
+    title: resolveMergedTitle(chunkResults, userTitle),
+    description: resolveMergedDescription(chunkResults, userDescription),
     questions: allQuestions,
   };
 
+  const mergedSections = resolveMergedSections(chunkResults);
   if (mergedSections.length > 0) {
     mergedQuiz.sections = mergedSections;
   }
+
+  const mergedSettings = resolveMergedSettings(chunkResults);
   if (Object.keys(mergedSettings).length > 0) {
     mergedQuiz.settings = mergedSettings;
   }
 
   return mergedQuiz;
+}
+
+function buildPromptForChunk(
+  params: QuizGenerationPipelineInput,
+  chunk: string,
+  chunkIndex: number,
+  totalChunks: number
+): string {
+  if (totalChunks === 1 && params.mode && params.mode !== 'convert') {
+    return buildGenerationPrompt({
+      sourceContent: chunk,
+      instructions: params.instructions,
+      mode: params.mode,
+    });
+  }
+  if (chunkIndex === 1) {
+    return buildRawTextConversionPrompt({
+      input: chunk,
+      title: params.title,
+      description: params.description,
+    });
+  }
+  return buildChunkQuestionsPrompt({
+    input: chunk,
+    chunkIndex,
+    totalChunks,
+  });
+}
+
+async function processAllChunks(
+  chunks: string[],
+  params: QuizGenerationPipelineInput,
+  config: OllamaConfig
+): Promise<{ success: boolean; chunkResults?: ChunkResult[]; error?: string; stage?: string }> {
+  const chunkResults: ChunkResult[] = [];
+  const systemPrompt = QUIZMANIA_RAW_TEXT_SYSTEM_PROMPT;
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunkIndex = i + 1;
+    params.onProgress?.({
+      current: chunkIndex,
+      total: chunks.length,
+      message: `Processing question batch ${chunkIndex} of ${chunks.length}`
+    });
+
+    const prompt = buildPromptForChunk(params, chunks[i], chunkIndex, chunks.length);
+
+    try {
+      const result = await processChunkWithRetry(
+        prompt,
+        systemPrompt,
+        config,
+        chunkIndex,
+        chunks.length
+      );
+      chunkResults.push(result);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : '';
+      const isUnavailable = isUnavailableError(errMsg);
+      return {
+        success: false,
+        error: isUnavailable
+          ? 'Ollama is unavailable. Make sure Ollama is running and the configured model is installed.'
+          : 'AI returned invalid quiz JSON. Please try again or edit the input.',
+        stage: 'ollama_call'
+      };
+    }
+  }
+
+  return { success: true, chunkResults };
 }
 
 /**
@@ -256,64 +351,18 @@ export async function runQuizGenerationPipeline(
     console.log(`[QuizAI] Chunk ${idx + 1}/${chunks.length}: ${c.length} chars`);
   });
 
-  const systemPrompt = QUIZMANIA_RAW_TEXT_SYSTEM_PROMPT;
-  const chunkResults: ChunkResult[] = [];
-
-  for (let i = 0; i < chunks.length; i++) {
-    const chunkIndex = i + 1;
-    const progressMessage = `Processing question batch ${chunkIndex} of ${chunks.length}`;
-    params.onProgress?.({
-      current: chunkIndex,
-      total: chunks.length,
-      message: progressMessage
-    });
-
-    let prompt: string;
-    if (chunks.length === 1 && params.mode && params.mode !== 'convert') {
-      prompt = buildGenerationPrompt({
-        sourceContent: chunks[i],
-        instructions: params.instructions,
-        mode: params.mode,
-      });
-    } else if (i === 0) {
-      prompt = buildRawTextConversionPrompt({
-        input: chunks[i],
-        title: params.title,
-        description: params.description,
-      });
-    } else {
-      prompt = buildChunkQuestionsPrompt({
-        input: chunks[i],
-        chunkIndex,
-        totalChunks: chunks.length,
-      });
-    }
-
-    try {
-      const result = await processChunkWithRetry(
-        prompt,
-        systemPrompt,
-        config,
-        chunkIndex,
-        chunks.length
-      );
-      chunkResults.push(result);
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : '';
-      const isUnavailable = isUnavailableError(errMsg);
-      return {
-        success: false,
-        error: isUnavailable
-          ? 'Ollama is unavailable. Make sure Ollama is running and the configured model is installed.'
-          : 'AI returned invalid quiz JSON. Please try again or edit the input.',
-        stage: 'ollama_call',
-        chunksCount: chunks.length
-      };
-    }
+  const processed = await processAllChunks(chunks, params, config);
+  if (!processed.success || !processed.chunkResults) {
+    return {
+      success: false,
+      error: processed.error || 'Failed to process chunks',
+      stage: processed.stage || 'ollama_call',
+      chunksCount: chunks.length
+    };
   }
 
   // Deterministically merge all chunk outputs
-  const mergedQuizObj = mergeChunkResults(chunkResults, params.title, params.description);
+  const mergedQuizObj = mergeChunkResults(processed.chunkResults, params.title, params.description);
 
   // Validate with canonical QuizMania schema
   const validation = validateQuizJson(mergedQuizObj);
