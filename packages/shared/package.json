@@ -5,7 +5,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "npx tsx src/__tests__/scoring.test.ts && npx tsx src/__tests__/responses.test.ts && npx tsx src/__tests__/crud-lifecycle.test.ts && npx tsx src/__tests__/schedule-availability.test.ts && npx tsx src/__tests__/security.test.ts"
+    "test": "npx tsx src/__tests__/scoring.test.ts && npx tsx src/__tests__/responses.test.ts && npx tsx src/__tests__/crud-lifecycle.test.ts && npx tsx src/__tests__/schedule-availability.test.ts && npx tsx src/__tests__/security.test.ts && npx tsx src/__tests__/club-summary.test.ts"
   },
   "dependencies": {
     "@quizmania/quiz-schema": "*",

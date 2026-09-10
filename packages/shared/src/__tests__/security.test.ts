@@ -11,6 +11,7 @@ import {
   updateQuizAttemptStatus,
   scoreAndRecordQuizSubmission,
   getSupabaseServiceKey,
+  getSupabaseAnonKey,
   isSupabaseAdminConfigured,
   getResponsesPaginated,
   mockStore
@@ -839,6 +840,56 @@ async function runSecurityTests() {
     passing_score_percentage: 150
   });
   assertEqual(overPassingScoreParsed.success, false, '38f. Quiz settings schema rejects passing score percentage > 100');
+
+  // -------------------------------------------------------------
+  // Test 39: Supabase Key Isolation & Summary Endpoints Protection
+  // -------------------------------------------------------------
+  // 39a: Service role key cannot be accessed when window exists (simulating browser)
+  (globalThis as any).window = {};
+  const serviceKeyInBrowser = getSupabaseServiceKey();
+  assertEqual(serviceKeyInBrowser, null, '39a. Service role key strictly returns null in browser environment (window defined)');
+  delete (globalThis as any).window;
+
+  // 39b: Anon/publishable key is accessible to public client
+  const anonKey = getSupabaseAnonKey();
+  assert(Boolean(anonKey && !anonKey.includes('placeholder')), '39b. Supabase publishable/anon key is configured for browser-safe use');
+
+  // 39c: Service key is never returned by getSupabaseAnonKey()
+  assert(!anonKey?.includes('service_role') && !anonKey?.includes('sb_secret_'), '39c. Anon/publishable key is never a secret service-role key');
+
+  // 39d: Summary API handler requires authenticated admin session
+  const { GET: summaryHandler } = await import('../../../../apps/admin/src/app/api/responses/summary/route');
+  const unauthSummaryReq = new Request('http://localhost:3011/api/responses/summary') as any;
+  const unauthSummaryRes = await summaryHandler(unauthSummaryReq);
+  assertEqual(unauthSummaryRes.status, 401, '39d. Unauthenticated GET /api/responses/summary rejected with 401 Unauthorized');
+
+  // 39e: Authenticated Summary API succeeds
+  const authSummaryReq = new Request('http://localhost:3011/api/responses/summary', {
+    headers: {
+      cookie: `${ADMIN_ACCESS_COOKIE}=test-admin-token`
+    }
+  }) as any;
+  const authSummaryRes = await summaryHandler(authSummaryReq);
+  assertEqual(authSummaryRes.status, 200, '39e. Authenticated GET /api/responses/summary succeeds with 200 OK');
+  const summaryJson = await authSummaryRes.json();
+  assertEqual(summaryJson.success, true, '39e2. Authenticated summary response returns success: true');
+
+  // 39f: Summary Export API requires authenticated admin session
+  const { GET: summaryExportHandler } = await import('../../../../apps/admin/src/app/api/responses/summary/export/route');
+  const unauthExportReq = new Request('http://localhost:3011/api/responses/summary/export') as any;
+  const unauthExportRes = await summaryExportHandler(unauthExportReq);
+  assertEqual(unauthExportRes.status, 401, '39f. Unauthenticated GET /api/responses/summary/export rejected with 401 Unauthorized');
+
+  // 39g: Authenticated Summary Export API succeeds with CSV
+  const authExportReq = new Request('http://localhost:3011/api/responses/summary/export', {
+    headers: {
+      cookie: `${ADMIN_ACCESS_COOKIE}=test-admin-token`
+    }
+  }) as any;
+  const authExportRes = await summaryExportHandler(authExportReq);
+  assertEqual(authExportRes.status, 200, '39g. Authenticated GET /api/responses/summary/export succeeds with 200 OK');
+  const summaryCsvText = await authExportRes.text();
+  assert(summaryCsvText.includes('Club Name,Response Count,Percentage'), '39g2. Summary Export contains expected CSV header');
 
   console.log(`\nSecurity Test Results: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {

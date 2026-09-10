@@ -17,6 +17,7 @@ import type {
 import { convertQuizJsonToQuiz, getQuizAvailability, validateScheduleTimes } from '@quizmania/quiz-schema';
 import { getSupabaseAdminClient, isSupabaseDatabaseReady } from '../supabase';
 import { mockStore, AdminUserRecord } from '../mock-data';
+import { ClubSummaryReport, generateClubSummary, exportClubSummaryCsv } from '../club-summary';
 
 const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -1004,6 +1005,27 @@ export async function exportResponsesCsv(filters: ResponsesFilterParams = {}): P
   ].join(','));
 
   return [headers.join(','), ...rows].join('\n');
+}
+
+/**
+ * Generates a grouped Club Participation Summary report based on response records matching filters.
+ */
+export async function getClubSummary(filters: ResponsesFilterParams = {}): Promise<ClubSummaryReport> {
+  const result = await getResponsesPaginated({
+    ...filters,
+    page: 1,
+    pageSize: 10000 // Aggregate all matching records
+  });
+
+  return generateClubSummary(result.items);
+}
+
+/**
+ * Formats club participation summary as a standardized CSV string.
+ */
+export async function exportClubSummaryCsvFromFilters(filters: ResponsesFilterParams = {}): Promise<string> {
+  const summary = await getClubSummary(filters);
+  return exportClubSummaryCsv(summary);
 }
 
 /**

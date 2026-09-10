@@ -109,14 +109,17 @@ for (const filePath of trackedFiles) {
     }
 
     // Check 4: Private API key patterns (e.g. sk_live_, ghp_, sb_secret_)
-    const privateKeyRegex = /\b(sk_live_[0-9a-zA-Z]{20,}|ghp_[0-9a-zA-Z]{30,}|sb_secret_[0-9a-zA-Z]{20,})\b/;
-    if (privateKeyRegex.test(line)) {
-      violations.push({
-        file: filePath,
-        line: lineNum,
-        rule: 'Private API Key Pattern',
-        description: `Potential private credential pattern detected in tracked file.`
-      });
+    const isScannerFile = filePath.includes('scan-secrets.mjs');
+    if (!isScannerFile) {
+      const privateKeyRegex = /\b(sk_live_[0-9a-zA-Z]{20,}|ghp_[0-9a-zA-Z]{30,}|sb_secret_[0-9a-zA-Z_-]{15,})\b/;
+      if (privateKeyRegex.test(line)) {
+        violations.push({
+          file: filePath,
+          line: lineNum,
+          rule: 'Private API Key Pattern',
+          description: `Potential private credential pattern detected in tracked file.`
+        });
+      }
     }
 
     // Check 5: Deprecated / forbidden ADMIN_API_SECRET or x-admin-key
@@ -128,6 +131,32 @@ for (const filePath of trackedFiles) {
           line: lineNum,
           rule: 'Deprecated Static Admin Secret',
           description: `Usage of deprecated ADMIN_API_SECRET or x-admin-key header detected. All admin access must use authenticated sessions.`
+        });
+      }
+    }
+  }
+}
+
+// Check 6: Client bundles (.next/static) must never contain service_role, sb_secret_, or secret keys
+const clientBundleDirs = [
+  'apps/admin/.next/static',
+  'apps/public/.next/static'
+];
+
+for (const bundleDir of clientBundleDirs) {
+  if (fs.existsSync(bundleDir)) {
+    const bundleFiles = fs.readdirSync(bundleDir, { recursive: true });
+    for (const f of bundleFiles) {
+      const fullPath = path.join(bundleDir, f);
+      if (!fs.statSync(fullPath).isFile()) continue;
+      if (!fullPath.endsWith('.js') && !fullPath.endsWith('.html')) continue;
+      const bContent = fs.readFileSync(fullPath, 'utf-8');
+      if (bContent.includes('service_role') || bContent.includes('sb_secret_') || bContent.includes('SUPABASE_SERVICE_ROLE_KEY') || bContent.includes('SUPABASE_SECRET_KEY')) {
+        violations.push({
+          file: fullPath,
+          line: 1,
+          rule: 'Secret Credential in Client Bundle',
+          description: `Client bundle in ${fullPath} contains service_role / secret references!`
         });
       }
     }

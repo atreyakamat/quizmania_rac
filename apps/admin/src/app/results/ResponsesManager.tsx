@@ -29,8 +29,13 @@ import {
   Calendar, 
   Check, 
   Sparkles,
-  TrendingUp
+  TrendingUp,
+  FileSpreadsheet,
+  Printer,
+  Copy,
+  Users
 } from 'lucide-react';
+import type { ClubSummaryReport } from '@quizmania/shared';
 
 interface ResponsesManagerProps {
   initialData: PaginatedResponsesResult;
@@ -62,6 +67,13 @@ export function ResponsesManager({ initialData, quizzes }: ResponsesManagerProps
   const [gradeInputs, setGradeInputs] = useState<Record<string, number>>({});
   const [savingGradeFor, setSavingGradeFor] = useState<string | null>(null);
   const [gradeStatusMsg, setGradeStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Summary Report state
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryReport, setSummaryReport] = useState<ClubSummaryReport | null>(null);
+  const [summarySearch, setSummarySearch] = useState('');
+  const [summaryCopied, setSummaryCopied] = useState(false);
 
   // Debounce search input
   useEffect(() => {
@@ -213,6 +225,68 @@ export function ResponsesManager({ initialData, quizzes }: ResponsesManagerProps
     window.open(`/api/responses/export?${params.toString()}`, '_blank');
   };
 
+  // Open & Fetch Club Participation Summary Report
+  const handleOpenSummaryReport = async () => {
+    setIsSummaryModalOpen(true);
+    setSummaryLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      if (quizId) params.set('quizId', quizId);
+      if (status !== 'all') params.set('status', status);
+      if (minScore) params.set('minScore', minScore);
+      if (maxScore) params.set('maxScore', maxScore);
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+      params.set('sortBy', sortBy);
+      params.set('sortOrder', sortOrder);
+
+      const res = await fetch(`/api/responses/summary?${params.toString()}`);
+      const json = await res.json();
+      if (json.success && json.summary) {
+        setSummaryReport(json.summary);
+      }
+    } catch (err) {
+      console.error('Failed to load club summary:', err);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  // Export Club Participation Summary CSV
+  const handleExportSummaryCsv = () => {
+    const params = new URLSearchParams();
+    if (debouncedSearch) params.set('search', debouncedSearch);
+    if (quizId) params.set('quizId', quizId);
+    if (status !== 'all') params.set('status', status);
+    if (minScore) params.set('minScore', minScore);
+    if (maxScore) params.set('maxScore', maxScore);
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    params.set('sortBy', sortBy);
+    params.set('sortOrder', sortOrder);
+
+    window.open(`/api/responses/summary/export?${params.toString()}`, '_blank');
+  };
+
+  // Copy Summary to Clipboard
+  const handleCopySummary = () => {
+    if (!summaryReport) return;
+    const rows = [
+      'Club Name\tResponses\tPercentage',
+      ...summaryReport.items.map(item => `${item.clubName}\t${item.count}\t${item.percentage.toFixed(1)}%`),
+      `TOTAL\t${summaryReport.totalResponses}\t100.0%`
+    ];
+    navigator.clipboard.writeText(rows.join('\n'));
+    setSummaryCopied(true);
+    setTimeout(() => setSummaryCopied(false), 2000);
+  };
+
+  // Print Summary
+  const handlePrintSummary = () => {
+    window.print();
+  };
+
   const summary = data.summary;
 
   return (
@@ -324,19 +398,28 @@ export function ResponsesManager({ initialData, quizzes }: ResponsesManagerProps
             </select>
           </div>
 
-          {/* Actions & CSV Export */}
+          {/* Actions: CSV Export & Summary Report */}
           <div className="flex items-center gap-2">
             <button
               onClick={handleExportCsv}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+              title="Export Raw Responses CSV"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
             >
               <Download className="w-3.5 h-3.5 text-slate-500" />
               <span>Export CSV</span>
             </button>
             <button
+              onClick={handleOpenSummaryReport}
+              title="Generate Club Participation Summary Report"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-[#A50D52] hover:bg-[#830940] shadow-xs rounded-xl transition-colors"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Summary Report</span>
+            </button>
+            <button
               onClick={handleResetFilters}
               title="Reset Filters"
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors shrink-0"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -842,6 +925,274 @@ export function ResponsesManager({ initialData, quizzes }: ResponsesManagerProps
               >
                 Close Breakdown
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Club Participation Summary Modal */}
+      {isSummaryModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white">
+          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 print:max-h-none print:shadow-none print:rounded-none">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-200 flex items-start justify-between bg-gradient-to-r from-slate-50 to-white">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#F3D6E1]/60 text-[#A50D52] flex items-center justify-center font-bold shrink-0">
+                  <FileSpreadsheet className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-[#A50D52] bg-[#F3D6E1]/50 px-2.5 py-0.5 rounded-full">
+                      Participation Report
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500">
+                      Rotaract Club of Mapusa
+                    </span>
+                  </div>
+                  <h3 className="text-xl font-extrabold text-slate-800 mt-1">
+                    Club Participation Summary
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Case-insensitive, whitespace-normalized response breakdown by participant club name
+                  </p>
+                </div>
+              </div>
+
+              {/* Header Action Buttons */}
+              <div className="flex items-center gap-2 print:hidden">
+                <button
+                  onClick={handleExportSummaryCsv}
+                  title="Download Summary CSV"
+                  disabled={summaryLoading || !summaryReport}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Download CSV</span>
+                </button>
+                <button
+                  onClick={handleCopySummary}
+                  title="Copy Table to Clipboard"
+                  disabled={summaryLoading || !summaryReport}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  {summaryCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={handlePrintSummary}
+                  title="Print Report"
+                  disabled={summaryLoading || !summaryReport}
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  <Printer className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setIsSummaryModalOpen(false)}
+                  title="Close Modal"
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {summaryLoading ? (
+                <div className="p-16 flex flex-col items-center justify-center text-center">
+                  <div className="w-10 h-10 border-4 border-[#F3D6E1] border-t-[#A50D52] rounded-full animate-spin mb-4" />
+                  <span className="text-sm font-bold text-slate-700">Generating Club Summary...</span>
+                  <span className="text-xs text-slate-400 mt-1">Normalizing club names and aggregating frequencies</span>
+                </div>
+              ) : summaryReport ? (
+                <>
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                        <Users className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                          Total Responses
+                        </span>
+                        <span className="text-xl font-black text-slate-800">
+                          {summaryReport.totalResponses}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                        <Building className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                          Unique Clubs
+                        </span>
+                        <span className="text-xl font-black text-slate-800">
+                          {summaryReport.uniqueClubs}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#F3D6E1] text-[#A50D52] flex items-center justify-center font-bold">
+                        <Award className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                          Top Participating Club
+                        </span>
+                        <span className="text-sm font-extrabold text-slate-800 block truncate" title={summaryReport.items[0]?.clubName}>
+                          {summaryReport.items[0]?.clubName || 'None'}
+                        </span>
+                        {summaryReport.items[0] && (
+                          <span className="text-[11px] text-[#A50D52] font-semibold">
+                            {summaryReport.items[0].count} responses ({summaryReport.items[0].percentage.toFixed(1)}%)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Filter / Search within Summary */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                    <div className="relative w-full sm:w-72">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search club in summary..."
+                        value={summarySearch}
+                        onChange={e => setSummarySearch(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#A50D52] bg-slate-50/50"
+                      />
+                    </div>
+                    <span className="text-xs text-slate-400">
+                      Sorted by highest frequency • Alphabetical secondary sort
+                    </span>
+                  </div>
+
+                  {/* Summary Frequency Table */}
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                          <th className="px-5 py-3 w-16">#</th>
+                          <th className="px-5 py-3">Club Name</th>
+                          <th className="px-5 py-3 text-right w-32">Responses</th>
+                          <th className="px-5 py-3 text-right w-44">Share</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-xs">
+                        {(() => {
+                          const filteredItems = summaryReport.items.filter(item =>
+                            item.clubName.toLowerCase().includes(summarySearch.toLowerCase().trim())
+                          );
+
+                          if (filteredItems.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan={4} className="px-5 py-8 text-center text-slate-400">
+                                  No clubs match &ldquo;{summarySearch}&rdquo;
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          return filteredItems.map((item, idx) => {
+                            const isUnknown = item.clubName === 'Unknown / Not Provided';
+                            return (
+                              <tr key={item.clubName} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="px-5 py-3.5 text-slate-400 font-mono text-xs">
+                                  {idx + 1}
+                                </td>
+                                <td className="px-5 py-3.5 font-semibold text-slate-800">
+                                  {isUnknown ? (
+                                    <span className="inline-flex items-center gap-1.5 text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg text-xs font-medium">
+                                      {item.clubName}
+                                    </span>
+                                  ) : (
+                                    <span>{item.clubName}</span>
+                                  )}
+                                </td>
+                                <td className="px-5 py-3.5 text-right font-extrabold text-slate-900 font-mono text-sm">
+                                  {item.count}
+                                </td>
+                                <td className="px-5 py-3.5 text-right">
+                                  <div className="flex items-center justify-end gap-2.5">
+                                    <div className="w-20 bg-slate-100 rounded-full h-2 overflow-hidden hidden sm:block">
+                                      <div
+                                        className="bg-[#A50D52] h-full rounded-full transition-all duration-300"
+                                        style={{ width: `${Math.min(100, item.percentage)}%` }}
+                                      />
+                                    </div>
+                                    <span className="font-mono text-slate-600 w-12 text-right">
+                                      {item.percentage.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          });
+                        })()}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-50 border-t-2 border-slate-200 font-extrabold text-xs text-slate-800">
+                          <td className="px-5 py-3.5 text-slate-400">∑</td>
+                          <td className="px-5 py-3.5">GRAND TOTAL</td>
+                          <td className="px-5 py-3.5 text-right font-mono text-sm text-[#A50D52]">
+                            {summaryReport.totalResponses}
+                          </td>
+                          <td className="px-5 py-3.5 text-right font-mono text-slate-700">
+                            100.0%
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    ℹ️ Club names are grouped case-insensitively and internal whitespace is normalized so subtle typing differences do not create duplicate clubs. Responses with missing or blank club fields are grouped under &ldquo;Unknown / Not Provided&rdquo;.
+                  </p>
+                </>
+              ) : (
+                <div className="p-8 text-center text-slate-500">
+                  No summary data available.
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between print:hidden">
+              <span className="text-[11px] text-slate-400">
+                QuizMania Platform • Rotaract Club of Mapusa
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportSummaryCsv}
+                  disabled={!summaryReport}
+                  className="px-4 py-2 text-xs font-bold text-white bg-[#A50D52] hover:bg-[#830940] rounded-xl transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Summary CSV</span>
+                </button>
+                <button
+                  onClick={() => setIsSummaryModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200 bg-slate-100 rounded-xl transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

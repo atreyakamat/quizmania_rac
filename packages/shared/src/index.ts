@@ -9,5 +9,6 @@ export * from './dal/admin';
 export * from './fixtures/qa-fixture';
 export * from './rate-limiter';
 export * from './auth';
+export * from './club-summary';
 export * from '@quizmania/quiz-schema';
 

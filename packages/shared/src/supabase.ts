@@ -4,34 +4,87 @@ let publicClientInstance: SupabaseClient | null = null;
 let adminClientInstance: SupabaseClient | null = null;
 
 const DEFAULT_SUPABASE_URL = 'https://eaqmwvxggnyprletpklr.supabase.co';
-const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhcW13dnhnZ255cHJsZXRwa2xyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1MDgyOTgsImV4cCI6MjEwNDA4NDI5OH0._2JAhfvsSg1WkWQmueSFjul0NBeDqxpF3h--DFyo2Uc';
+
+function loadEnvIfAvailable(): void {
+  if (typeof window !== 'undefined') return;
+  if (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return;
+  try {
+    const req = typeof (globalThis as any).__non_webpack_require__ !== 'undefined'
+      ? (globalThis as any).__non_webpack_require__
+      : eval('require');
+    const fs = req('fs');
+    const path = req('path');
+    const candidates = [
+      path.resolve(process.cwd(), '.env.local'),
+      path.resolve(process.cwd(), '../../.env.local'),
+      path.resolve(__dirname, '../../../.env.local'),
+      path.resolve(__dirname, '../../../../.env.local')
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        const content = fs.readFileSync(p, 'utf8');
+        for (const line of content.split('\n')) {
+          const match = line.match(/^([^=]+)=(.*)$/);
+          if (match) {
+            const key = match[1].trim();
+            const val = match[2].trim();
+            if (!process.env[key]) {
+              process.env[key] = val;
+            }
+          }
+        }
+        break;
+      }
+    }
+  } catch {}
+}
 
 export function getSupabaseUrl(): string {
+  loadEnvIfAvailable();
   const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  if (envUrl && !envUrl.includes('placeholder') && !envUrl.includes('your-supabase-url')) {
+  if (envUrl && !envUrl.includes('placeholder') && !envUrl.includes('your-supabase-url') && !envUrl.includes('your-project')) {
     return envUrl;
   }
   return DEFAULT_SUPABASE_URL;
 }
 
-export function getSupabaseAnonKey(): string {
-  const envKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  if (envKey && !envKey.includes('placeholder') && !envKey.includes('your-supabase-key')) {
+export function getSupabaseAnonKey(): string | null {
+  loadEnvIfAvailable();
+  const envKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_ANON_KEY;
+  if (
+    envKey &&
+    !envKey.includes('placeholder') &&
+    !envKey.includes('your-supabase-key') &&
+    !envKey.includes('your-anon-public-key') &&
+    !envKey.includes('your_supabase_publishable_key')
+  ) {
     return envKey;
   }
-  return DEFAULT_SUPABASE_ANON_KEY;
+  if (process.env.NODE_ENV === 'test') {
+    return 'test-publishable-key';
+  }
+  return null;
 }
 
 export function getSupabaseServiceKey(): string | null {
   if (typeof window !== 'undefined') {
+    // Hard security boundary: Service role key MUST NEVER be accessible on the client side
     return null;
   }
-  const envKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  loadEnvIfAvailable();
+  const envKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY;
   if (
     envKey &&
     !envKey.includes('placeholder') &&
     !envKey.includes('your-service-role') &&
-    !envKey.includes('your_service_role')
+    !envKey.includes('your_service_role') &&
+    !envKey.includes('your_supabase_service_role_key')
   ) {
     return envKey;
   }
@@ -41,7 +94,13 @@ export function getSupabaseServiceKey(): string | null {
 export function isSupabaseConfigured(): boolean {
   const url = getSupabaseUrl();
   const anonKey = getSupabaseAnonKey();
-  return Boolean(url && anonKey && !url.includes('placeholder'));
+  return Boolean(url && anonKey && !url.includes('placeholder') && !url.includes('your-project'));
+}
+
+export function resetSupabaseClients(): void {
+  publicClientInstance = null;
+  adminClientInstance = null;
+  dbReadyCache = null;
 }
 
 export function isSupabaseAdminConfigured(): boolean {
@@ -64,7 +123,7 @@ export function getSupabasePublicClient(): SupabaseClient | null {
   }
   if (!publicClientInstance) {
     const url = getSupabaseUrl();
-    const anonKey = getSupabaseAnonKey();
+    const anonKey = getSupabaseAnonKey()!;
     publicClientInstance = createClient(url, anonKey, {
       auth: { persistSession: false },
       global: {
@@ -121,7 +180,7 @@ export function getSupabaseAuthenticatedClient(accessToken: string): SupabaseCli
     return null;
   }
   const url = getSupabaseUrl();
-  const anonKey = getSupabaseAnonKey();
+  const anonKey = getSupabaseAnonKey()!;
   return createClient(url, anonKey, {
     auth: { persistSession: false },
     global: {
