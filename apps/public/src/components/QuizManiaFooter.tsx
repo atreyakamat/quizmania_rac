@@ -104,7 +104,18 @@ export function QuizManiaFooter() {
             © 2026 QuizMania • Rotaract Club of Mapusa. All rights reserved.
           </div>
           <div className="flex items-center gap-2 text-[11px] text-slate-400">
-            <span>Crafted with ❤️ for Rotaract Club of Mapusa by Atreya Kamat</span>
+            <span>
+              Crafted with ❤️ for Rotaract Club of Mapusa by{' '}
+              <a
+                href="https://atreyakamat.dev"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slate-300 hover:text-[#FF8494] transition-colors underline decoration-dotted underline-offset-2"
+              >
+                Atreya Kamat
+              </a>{' '}
+              (ISD)
+            </span>
           </div>
         </div>
       </div>

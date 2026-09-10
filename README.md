@@ -1,7 +1,7 @@
 # QuizMania
 
 ### A Flexible Quiz Creation & Participation Platform by Rotaract Club of Mapusa
-*Rotary International District 3170 | Built by Atreya Kamat*
+*Rotary International District 3170 | Built by Atreya Kamat (ISD)*
 
 **QuizMania** is a production-grade, event-ready quiz management platform comparable in core functionality to Google Forms Quiz. It is a Next.js monorepo with a private Admin Studio and a public participant-facing quiz application.
 
@@ -229,12 +229,7 @@ Set env vars in Netlify dashboard. **Do not deploy the admin app.**
 
 ## 👤 Creator
 
-**QuizMania** was built by **Atreya Kamat** — web builder, platform systems developer, private tutor, and Founder of [Stix 'N' Vibes](https://stixnvibes.com).
-
-- 🌐 [atreyakamat.dev](https://atreyakamat.dev)
-- Platform: [quizmania.atreyakamat.dev](https://quizmania.atreyakamat.dev)
-
-Hosted for **Rotaract Club of Mapusa**, RI District 3170.
+Built by [Atreya Kamat](https://atreyakamat.dev) — International Service Director (ISD), Rotaract Club of Mapusa (RID 3170).
 
 ---
 
