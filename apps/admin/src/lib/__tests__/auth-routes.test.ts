@@ -5,6 +5,8 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { POST as loginPost } from '../../app/api/auth/login/route';
 import { POST as refreshPost } from '../../app/api/auth/refresh/route';
+import { POST as uploadPost } from '../../app/api/upload/route';
+import { NextRequest } from 'next/server';
 import { setMockSupabaseClients, resetSupabaseClients, mockStore } from '@quizmania/shared';
 
 async function runAuthRouteTests() {
@@ -385,6 +387,103 @@ async function runAuthRouteTests() {
       process.env.FORCE_MOCK_STORE = 'true';
       resetSupabaseClients();
     }
+  });
+
+  // --- 3. Upload Route Tests ---
+  await test('7. Upload: Validation, Security & Upload Handling', async () => {
+    // A. Unauthenticated
+    const reqNoAuth = new NextRequest('http://localhost:3000/api/upload', {
+      method: 'POST',
+      headers: { origin: 'http://localhost:3000', host: 'localhost:3000', 'x-forwarded-for': '10.9.0.2' }
+    });
+    const resNoAuth = await uploadPost(reqNoAuth);
+    assert.ok(resNoAuth.status === 401, 'Upload rejects unauthenticated request');
+
+    // B. No file provided
+    const fdEmpty = new FormData();
+    fdEmpty.append('bucket', 'quiz-covers');
+    const reqEmpty = new NextRequest('http://localhost:3000/api/upload', {
+      method: 'POST',
+      body: fdEmpty,
+      headers: { origin: 'http://localhost:3000', host: 'localhost:3000', cookie: 'sb-access-token=test-admin-token', 'x-forwarded-for': '10.9.0.3' }
+    });
+    const resEmpty = await uploadPost(reqEmpty);
+    assert.ok(resEmpty.status === 400, 'Upload rejects missing file');
+
+    // C. Invalid bucket
+    const fdBadBucket = new FormData();
+    fdBadBucket.append('file', new File(['test'], 'test.png', { type: 'image/png' }));
+    fdBadBucket.append('bucket', 'not-a-valid-bucket');
+    const reqBadBucket = new NextRequest('http://localhost:3000/api/upload', {
+      method: 'POST',
+      body: fdBadBucket,
+      headers: { origin: 'http://localhost:3000', host: 'localhost:3000', cookie: 'sb-access-token=test-admin-token', 'x-forwarded-for': '10.9.0.4' }
+    });
+    const resBadBucket = await uploadPost(reqBadBucket);
+    assert.ok(resBadBucket.status === 400, 'Upload rejects invalid bucket');
+
+    // D. Disallowed SVG mime type
+    const fdSvg = new FormData();
+    fdSvg.append('file', new File(['<svg></svg>'], 'exploit.svg', { type: 'image/svg+xml' }));
+    fdSvg.append('bucket', 'quiz-covers');
+    const reqSvg = new NextRequest('http://localhost:3000/api/upload', {
+      method: 'POST',
+      body: fdSvg,
+      headers: { origin: 'http://localhost:3000', host: 'localhost:3000', cookie: 'sb-access-token=test-admin-token', 'x-forwarded-for': '10.9.0.5' }
+    });
+    const resSvg = await uploadPost(reqSvg);
+    assert.ok(resSvg.status === 400, 'Upload rejects disallowed SVG mime type');
+
+    // E. Empty file
+    const fdEmptyFile = new FormData();
+    fdEmptyFile.append('file', new File([], 'empty.png', { type: 'image/png' }));
+    fdEmptyFile.append('bucket', 'quiz-covers');
+    const reqEmptyFile = new NextRequest('http://localhost:3000/api/upload', {
+      method: 'POST',
+      body: fdEmptyFile,
+      headers: { origin: 'http://localhost:3000', host: 'localhost:3000', cookie: 'sb-access-token=test-admin-token', 'x-forwarded-for': '10.9.0.6' }
+    });
+    const resEmptyFile = await uploadPost(reqEmptyFile);
+    assert.ok(resEmptyFile.status === 400, 'Upload rejects 0-byte empty file');
+
+    // F. File too large (> 5MB)
+    const largeContent = new Uint8Array(5.5 * 1024 * 1024);
+    const fdLarge = new FormData();
+    fdLarge.append('file', new File([largeContent], 'large.png', { type: 'image/png' }));
+    fdLarge.append('bucket', 'quiz-covers');
+    const reqLarge = new NextRequest('http://localhost:3000/api/upload', {
+      method: 'POST',
+      body: fdLarge,
+      headers: { origin: 'http://localhost:3000', host: 'localhost:3000', cookie: 'sb-access-token=test-admin-token', 'x-forwarded-for': '10.9.0.7' }
+    });
+    const resLarge = await uploadPost(reqLarge);
+    assert.ok(resLarge.status === 400, 'Upload rejects files exceeding 5MB');
+
+    // G. Successful valid upload
+    const fdValid = new FormData();
+    fdValid.append('file', new File(['valid-image-bytes'], 'banner.jpg', { type: 'image/jpeg' }));
+    fdValid.append('bucket', 'branding-assets');
+    const reqValid = new NextRequest('http://localhost:3000/api/upload', {
+      method: 'POST',
+      body: fdValid,
+      headers: { origin: 'http://localhost:3000', host: 'localhost:3000', cookie: 'sb-access-token=test-admin-token', 'x-forwarded-for': '10.9.0.8' }
+    });
+    const resValid = await uploadPost(reqValid);
+    assert.ok(resValid.status === 200, 'Upload succeeds with valid file');
+    const validData = await resValid.json();
+    assert.ok(validData.success && Boolean(validData.url), 'Upload returns valid URL');
+
+    // H. Rate limiting
+    const ip = '10.9.9.99';
+    let resRateLimit: any = null;
+    for (let i = 0; i < 35; i++) {
+      const reqRate = new NextRequest('http://localhost:3000/api/upload', {
+        method: 'POST',
+        headers: { origin: 'http://localhost:3000', host: 'localhost:3000', 'x-forwarded-for': ip }
+      });
+      resRateLimit = await uploadPost(reqRate);
+    }
+    assert.ok(resRateLimit.status === 429, 'Upload rate limiter blocks excessive requests with 429');
   });
 
   console.log('All admin auth route tests completed successfully.');

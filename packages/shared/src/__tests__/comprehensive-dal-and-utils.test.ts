@@ -60,6 +60,7 @@ import {
   normalizeTextAnswer,
   calculateFinalScore,
   scoreAndRecordQuizSubmission,
+  processQuizSubmission,
 
   // Store
   mockStore
@@ -314,6 +315,18 @@ async function runComprehensiveTests() {
     const paginatedSearch = await getResponsesPaginated({ search: 'Rotaract' });
     assert.ok(Array.isArray(paginatedSearch.items), 'getResponsesPaginated supports search');
 
+    const searchEmail = await getResponsesPaginated({ search: 'admin@quizmania.dev' });
+    assert.ok(Array.isArray(searchEmail.items), 'getResponsesPaginated searches by participant email');
+
+    const searchQuiz = await getResponsesPaginated({ search: 'Engine Test' });
+    assert.ok(Array.isArray(searchQuiz.items), 'getResponsesPaginated searches by quiz title');
+
+    const searchClub = await getResponsesPaginated({ search: 'Mapusa' });
+    assert.ok(Array.isArray(searchClub.items), 'getResponsesPaginated searches by club name');
+
+    const sortSubmitted = await getResponsesPaginated({ sortBy: 'submitted_at', sortOrder: 'asc' });
+    assert.ok(Array.isArray(sortSubmitted.items), 'getResponsesPaginated sorts by submitted_at ascending');
+
     const emptySearch = await getResponsesPaginated({ search: '   ' });
     assert.ok(Array.isArray(emptySearch.items), 'getResponsesPaginated handles blank whitespace search');
 
@@ -491,8 +504,38 @@ async function runComprehensiveTests() {
     const reqBearer = new Request('http://localhost:3000/api/admin', {
       headers: { authorization: 'Bearer test-admin-token' }
     });
-    const resBearer = await requireAuthenticatedAdmin(reqBearer);
-    assert.ok(resBearer.authorized, 'requireAuthenticatedAdmin extracts tokens from Bearer header');
+    const reqBearerNoOrigin = new Request('http://localhost:3000/api/admin', {
+      method: 'POST',
+      headers: { authorization: 'Bearer some-api-token' }
+    });
+    assert.ok(verifyCsrfOrigin(reqBearerNoOrigin).valid, 'verifyCsrfOrigin allows Bearer token without origin');
+
+    const reqMalformedOrigin = new Request('http://localhost:3000/api/admin', {
+      method: 'POST',
+      headers: { origin: 'http://[invalid-url', host: 'localhost:3000' }
+    });
+    assert.ok(!verifyCsrfOrigin(reqMalformedOrigin).valid, 'verifyCsrfOrigin rejects malformed origin URL');
+
+    const reqMalformedReferer = new Request('http://localhost:3000/api/admin', {
+      method: 'POST',
+      headers: { referer: 'http://[invalid-url', host: 'localhost:3000' }
+    });
+    assert.ok(!verifyCsrfOrigin(reqMalformedReferer).valid, 'verifyCsrfOrigin rejects malformed referer URL');
+
+    const authNoIdent = await verifyAdminAuthorization('', '');
+    assert.ok(!authNoIdent.authorized && authNoIdent.reason === 'Missing user identification', 'verifyAdminAuthorization requires user identification');
+
+    const reqSsrObj = new Request('http://localhost:3000/api/admin', {
+      headers: { cookie: `sb-${ssrRef}-auth-token=${encodeURIComponent(JSON.stringify({ access_token: 'test-admin-token', refresh_token: 'valid-refresh-token' }))}` }
+    });
+    const resSsrObj = await requireAuthenticatedAdmin(reqSsrObj);
+    assert.ok(resSsrObj.authorized, 'requireAuthenticatedAdmin parses SSR cookie with object structure');
+
+    const reqSsrMalformed = new Request('http://localhost:3000/api/admin', {
+      headers: { cookie: `sb-${ssrRef}-auth-token=invalid%json` }
+    });
+    const resSsrMalformed = await requireAuthenticatedAdmin(reqSsrMalformed);
+    assert.ok(!resSsrMalformed.authorized, 'requireAuthenticatedAdmin handles malformed SSR cookie gracefully');
   });
 
   // --- 10. SCORING EDGE CASES ---
@@ -529,6 +572,127 @@ async function runComprehensiveTests() {
     const fullMc = scoreMultipleChoice(mcQuestion, ['opt-2', 'opt-4']);
     assert.ok(fullMc.earnedMarks === 6 && fullMc.isCorrect, 'scoreMultipleChoice full correct earns max marks');
 
+    // Single choice with wrong answer and negative marking
+    const scQuestion: Question = {
+      id: 'q-sc-neg',
+      quiz_id: 'quiz-score',
+      question_text: 'What is 2+2?',
+      question_type: 'single_choice',
+      marks: 4,
+      negative_marks: 1.5,
+      required: true,
+      question_order: 1,
+      options: [
+        { id: 'opt-sc-4', option_text: '4', is_correct: true, option_order: 1 },
+        { id: 'opt-sc-5', option_text: '5', is_correct: false, option_order: 2 }
+      ]
+    };
+    const scWrong = scoreQuestion({ question: scQuestion, answer: { questionId: 'q-sc-neg', selectedOptionId: 'opt-sc-5' } });
+    assert.ok(scWrong.earnedMarks === -1.5 && !scWrong.isCorrect, 'scoreQuestion single choice applies negative marks on wrong answer');
+
+    const scUnanswered = scoreQuestion({ question: scQuestion, answer: { questionId: 'q-sc-neg' } });
+    assert.ok(scUnanswered.earnedMarks === 0 && !scUnanswered.isCorrect, 'scoreQuestion single choice returns 0 on unanswered');
+
+    // True/false with wrong answer and negative marking
+    const tfQuestion: Question = {
+      id: 'q-tf-neg',
+      quiz_id: 'quiz-score',
+      question_text: 'The sky is green',
+      question_type: 'true_false',
+      marks: 2,
+      negative_marks: 1,
+      required: true,
+      question_order: 2,
+      options: [
+        { id: 'tf-t', option_text: 'True', is_correct: false, option_order: 1 },
+        { id: 'tf-f', option_text: 'False', is_correct: true, option_order: 2 }
+      ]
+    };
+    const tfWrong = scoreQuestion({ question: tfQuestion, answer: { questionId: 'q-tf-neg', selectedOptionId: 'tf-t' } });
+    assert.ok(tfWrong.earnedMarks === -1 && !tfWrong.isCorrect, 'scoreQuestion true_false applies negative marks on wrong answer');
+
+    // Multiple choice all-or-nothing with negative marking
+    const mcAonQuestion: Question = {
+      id: 'q-mc-aon',
+      quiz_id: 'quiz-score',
+      question_text: 'Select A and B',
+      question_type: 'multiple_choice',
+      marks: 10,
+      negative_marks: 3,
+      required: true,
+      question_order: 3,
+      scoring_method: 'all_or_nothing',
+      options: [
+        { id: 'opt-a', option_text: 'A', is_correct: true, option_order: 1 },
+        { id: 'opt-b', option_text: 'B', is_correct: true, option_order: 2 },
+        { id: 'opt-c', option_text: 'C', is_correct: false, option_order: 3 }
+      ]
+    };
+    const mcAonFail = scoreQuestion({ question: mcAonQuestion, answer: { questionId: 'q-mc-aon', selectedOptionIds: ['opt-a', 'opt-c'] } });
+    assert.ok(mcAonFail.earnedMarks === -3 && !mcAonFail.isCorrect, 'scoreQuestion MC all_or_nothing applies negative marks on failure');
+
+    const mcAonEmpty = scoreQuestion({ question: mcAonQuestion, answer: { questionId: 'q-mc-aon', selectedOptionIds: [] } });
+    assert.ok(mcAonEmpty.earnedMarks === 0 && !mcAonEmpty.isCorrect, 'scoreQuestion MC all_or_nothing returns 0 on empty selections');
+
+    const mcAonSingleFallback = scoreQuestion({ question: mcAonQuestion, answer: { questionId: 'q-mc-aon', selectedOptionId: 'opt-a' } });
+    assert.ok(mcAonSingleFallback.earnedMarks === -3, 'scoreQuestion MC handles selectedOptionId scalar fallback');
+
+    // Short text questions
+    const textQuestion: Question = {
+      id: 'q-text-ans',
+      quiz_id: 'quiz-score',
+      question_text: 'Capital of France?',
+      question_type: 'short_answer',
+      marks: 5,
+      negative_marks: 2,
+      required: true,
+      question_order: 4,
+      accepted_answers: ['Paris', 'City of Light'],
+      case_sensitive: false,
+      trim_whitespace: true,
+      normalize_spaces: true
+    };
+    const textMatch = scoreQuestion({ question: textQuestion, answer: { questionId: 'q-text-ans', textAnswer: '  paris  ' } });
+    assert.ok(textMatch.earnedMarks === 5 && textMatch.isCorrect, 'scoreQuestion text_answer matches normalized accepted answer');
+
+    const textWrong = scoreQuestion({ question: textQuestion, answer: { questionId: 'q-text-ans', textAnswer: 'London' } });
+    assert.ok(textWrong.earnedMarks === -2 && !textWrong.isCorrect, 'scoreQuestion text_answer deducts negative marks on mismatch');
+
+    const textEmpty = scoreQuestion({ question: textQuestion, answer: { questionId: 'q-text-ans', textAnswer: '   ' } });
+    assert.ok(textEmpty.earnedMarks === 0 && !textEmpty.isCorrect, 'scoreQuestion text_answer returns 0 on blank text');
+
+    // Short text with fallback to options when accepted_answers not provided
+    const textOptionFallback: Question = {
+      id: 'q-text-fallback',
+      quiz_id: 'quiz-score',
+      question_text: 'Name of club?',
+      question_type: 'short_text',
+      marks: 3,
+      negative_marks: 0,
+      required: false,
+      question_order: 5,
+      options: [
+        { id: 'opt-mapusa', option_text: 'Rotaract Mapusa', is_correct: true, option_order: 1 }
+      ]
+    };
+    const textFallbackMatch = scoreQuestion({ question: textOptionFallback, answer: { questionId: 'q-text-fallback', textAnswer: 'rotaract mapusa' } });
+    assert.ok(textFallbackMatch.earnedMarks === 3 && textFallbackMatch.isCorrect, 'scoreQuestion short_text falls back to option_text');
+
+    // Unknown question type default handler
+    const unknownTypeQuestion: any = {
+      id: 'q-custom',
+      quiz_id: 'quiz-score',
+      question_text: 'Custom question type',
+      question_type: 'matrix_grid',
+      marks: 5,
+      options: [{ id: 'opt-custom-1', is_correct: true }]
+    };
+    const unknownMatched = scoreQuestion({ question: unknownTypeQuestion, answer: { questionId: 'q-custom', selectedOptionId: 'opt-custom-1' } });
+    assert.ok(unknownMatched.earnedMarks === 5 && unknownMatched.isCorrect, 'scoreQuestion default handler awards marks on matching option');
+
+    const unknownUnmatched = scoreQuestion({ question: unknownTypeQuestion, answer: { questionId: 'q-custom', selectedOptionId: 'other' } });
+    assert.ok(unknownUnmatched.earnedMarks === 0 && !unknownUnmatched.isCorrect, 'scoreQuestion default handler returns 0 on non-matching option');
+
     const paraBreakdown = scoreQuestion({
       question: {
         id: 'q-para',
@@ -554,6 +718,62 @@ async function runComprehensiveTests() {
       { questionId: '1', questionText: 'Q1', questionType: 'single_choice', earnedMarks: -5, maxMarks: 5, isCorrect: false }
     ], true);
     assert.ok(finalScoreAllowNegative === -5, 'calculateFinalScore preserves negative total when allowed');
+
+    // Submissions scoring & recording in mock mode:
+    const missingQuizSub = await scoreAndRecordQuizSubmission('non-existent-quiz-id', {
+      participant: { name: 'Nobody' },
+      answers: []
+    });
+    assert.ok(!missingQuizSub.success && missingQuizSub.error?.includes('not found'), 'scoreAndRecordQuizSubmission returns error on missing quiz');
+
+    const missingReqSub = await scoreAndRecordQuizSubmission(QA_QUIZ_ID, {
+      participant: { name: 'Test Participant' },
+      answers: []
+    });
+    assert.ok(!missingReqSub.success && missingReqSub.error?.includes('Missing required question'), 'scoreAndRecordQuizSubmission catches missing required question');
+
+    const validQaSub = await scoreAndRecordQuizSubmission(QA_QUIZ_ID, {
+      attemptId: 'att-mock-valid-1',
+      participant: {
+        name: 'Valid Participant',
+        email: 'valid@rotaract.org',
+        club_name: 'Rotaract Club of Mapusa',
+        district_number: '3170',
+        position: 'Secretary'
+      },
+      answers: [
+        { questionId: '00000000-0000-0000-0000-0000000000f1', selectedOptionId: '00000000-0000-0000-0000-000000001011' },
+        { questionId: '00000000-0000-0000-0000-0000000000f2', selectedOptionIds: ['00000000-0000-0000-0000-000000001021', '00000000-0000-0000-0000-000000001022', '00000000-0000-0000-0000-000000001023'] },
+        { questionId: '00000000-0000-0000-0000-0000000000f3', selectedOptionId: '00000000-0000-0000-0000-000000001031' },
+        { questionId: '00000000-0000-0000-0000-0000000000f4', textAnswer: 'Rotaract' },
+        { questionId: '00000000-0000-0000-0000-0000000000f5', textAnswer: 'Blood donation camp initiative.' },
+        { questionId: '00000000-0000-0000-0000-0000000000f6', selectedOptionId: '00000000-0000-0000-0000-000000001061' },
+        { questionId: '00000000-0000-0000-0000-0000000000f7', selectedOptionId: '00000000-0000-0000-0000-000000001071' }
+      ]
+    });
+    assert.ok(validQaSub.success && Boolean(validQaSub.result), 'scoreAndRecordQuizSubmission records complete valid QA quiz submission');
+
+    const dupMockSub = await scoreAndRecordQuizSubmission(QA_QUIZ_ID, {
+      attemptId: 'att-mock-valid-1',
+      participant: { name: 'Valid Participant' },
+      answers: []
+    });
+    assert.ok(!dupMockSub.success && dupMockSub.error?.includes('already exists'), 'scoreAndRecordQuizSubmission rejects duplicate attempt in mock mode');
+
+    // Test processQuizSubmission alias
+    const aliasRes = await processQuizSubmission(QA_QUIZ_ID, {
+      attemptId: 'att-mock-alias-1',
+      participant: { name: 'Alias Participant' },
+      answers: [
+        { questionId: '00000000-0000-0000-0000-0000000000f1', selectedOptionId: '00000000-0000-0000-0000-000000001011' },
+        { questionId: '00000000-0000-0000-0000-0000000000f2', selectedOptionIds: ['00000000-0000-0000-0000-000000001021'] },
+        { questionId: '00000000-0000-0000-0000-0000000000f3', selectedOptionId: '00000000-0000-0000-0000-000000001031' },
+        { questionId: '00000000-0000-0000-0000-0000000000f4', textAnswer: 'Rotaract' },
+        { questionId: '00000000-0000-0000-0000-0000000000f6', selectedOptionId: '00000000-0000-0000-0000-000000001061' },
+        { questionId: '00000000-0000-0000-0000-0000000000f7', selectedOptionId: '00000000-0000-0000-0000-000000001071' }
+      ]
+    });
+    assert.ok(aliasRes.success, 'processQuizSubmission delegates to scoreAndRecordQuizSubmission');
   });
 
   console.log('All comprehensive DAL, auth and utility tests completed successfully.');

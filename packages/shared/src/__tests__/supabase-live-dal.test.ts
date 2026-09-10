@@ -306,6 +306,20 @@ async function runLiveDalTests() {
 
       const publicUrl = getStorageImageUrl('quiz-covers', 'quiz-covers/cover.png');
       assert.ok(publicUrl.includes('https://storage.supabase.co'), 'getStorageImageUrl returns public URL via client');
+
+      const mockStorageErrorClient = {
+        ...mockSupabaseClient,
+        storage: {
+          from: () => ({
+            upload: async () => ({ data: null, error: new Error('Upload permission denied') }),
+            getPublicUrl: () => ({ data: { publicUrl: '' } })
+          })
+        }
+      };
+      setMockSupabaseClients({ adminClient: mockStorageErrorClient, publicClient: mockStorageErrorClient, ready: true });
+      const failUpload = await uploadImage('quiz-covers', new Blob(['fake']), 'error.png');
+      assert.ok(!failUpload.success && failUpload.error === 'Upload permission denied', 'uploadImage returns error when storage fails');
+      setMockSupabaseClients({ adminClient: mockSupabaseClient, publicClient: mockSupabaseClient, ready: true });
     });
 
     await test('3. DAL Admin: Live queries', async () => {
@@ -344,6 +358,34 @@ async function runLiveDalTests() {
         ]
       });
       assert.ok(updatedQuiz !== null && updatedQuiz.title === 'Updated Live Quiz', 'saveQuiz updates live quiz record');
+
+      const liveDraftQuizzes = await getAllQuizzes('draft');
+      assert.ok(Array.isArray(liveDraftQuizzes), 'getAllQuizzes with draft filter runs on live table');
+
+      const livePubQuizzes = await getAllQuizzes('published');
+      assert.ok(Array.isArray(livePubQuizzes), 'getAllQuizzes with published filter runs on live table');
+
+      const liveNonExistentQuiz = await getQuizById('non-existent-live-id');
+      assert.ok(liveNonExistentQuiz === null, 'getQuizById returns null for missing quiz in live table');
+
+      const liveNonExistentSlug = await getQuizBySlug('non-existent-live-slug');
+      assert.ok(liveNonExistentSlug === null, 'getQuizBySlug returns null for missing slug in live table');
+
+      const livePaginatedFilters = await getResponsesPaginated({
+        status: 'passed',
+        minScore: 0,
+        maxScore: 100,
+        startDate: '2025-01-01',
+        endDate: '2030-01-01'
+      });
+      assert.ok(Array.isArray(livePaginatedFilters.items), 'getResponsesPaginated with status passed and score range runs on live table');
+
+      const livePaginatedFailed = await getResponsesPaginated({
+        status: 'failed',
+        sortBy: 'score',
+        sortOrder: 'asc'
+      });
+      assert.ok(Array.isArray(livePaginatedFailed.items), 'getResponsesPaginated with status failed and sort runs on live table');
 
       const liveThemes = await getAllThemes();
       assert.ok(Array.isArray(liveThemes) && liveThemes.length > 0, 'getAllThemes fetches from live table');
@@ -432,6 +474,45 @@ async function runLiveDalTests() {
         }
       );
       assert.ok(liveSubmissionResult.success, 'scoreAndRecordQuizSubmission records live submission');
+
+      // Reject duplicate attempt
+      const dupLiveSub = await scoreAndRecordQuizSubmission(
+        LIVE_QUIZ_ID,
+        {
+          attemptId: 'att-live-score-unique',
+          participant: { name: 'Duplicate Participant' },
+          answers: [{ questionId: LIVE_Q_ID, selectedOptionId: LIVE_OPT_ID }]
+        }
+      );
+      assert.ok(!dupLiveSub.success && dupLiveSub.error?.includes('already exists'), 'scoreAndRecordQuizSubmission rejects duplicate attempt');
+
+      // Submission using slug
+      const slugSub = await scoreAndRecordQuizSubmission(
+        'live-supabase-test-quiz',
+        {
+          attemptId: 'att-live-score-by-slug',
+          participant: { name: 'Slug Participant' },
+          answers: [{ questionId: LIVE_Q_ID, selectedOptionId: LIVE_OPT_ID }]
+        }
+      );
+      assert.ok(slugSub.success, 'scoreAndRecordQuizSubmission succeeds using quiz slug');
+
+      // Invalid option selection
+      const invalidOptSub = await scoreAndRecordQuizSubmission(
+        LIVE_QUIZ_ID,
+        {
+          attemptId: 'att-live-invalid-opt',
+          participant: { name: 'Invalid Option Participant' },
+          answers: [{ questionId: LIVE_Q_ID, selectedOptionId: 'non-existent-option' }]
+        }
+      );
+      assert.ok(!invalidOptSub.success && invalidOptSub.error?.includes('Invalid option'), 'scoreAndRecordQuizSubmission rejects invalid option');
+
+      const missingLivePubQuiz = await getPublishedQuizBySlug('non-existent-live-slug');
+      assert.ok(missingLivePubQuiz === null, 'getPublishedQuizBySlug returns null for missing slug');
+
+      const missingLiveToken = await getQuizAttemptByToken('non-existent-token');
+      assert.ok(missingLiveToken === null, 'getQuizAttemptByToken returns null for missing token');
 
       // Now test setQuizStatus transition to draft
       const liveStatusUpdate = await setQuizStatus(LIVE_QUIZ_ID, 'draft');
