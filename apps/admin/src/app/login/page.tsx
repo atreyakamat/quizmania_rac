@@ -64,6 +64,27 @@ function LoginForm() {
         <h2 className="font-semibold text-sm">Administrator Sign In</h2>
       </div>
 
+      {process.env.NODE_ENV !== 'production' && (
+        <div className="mb-4 p-3 rounded-xl bg-amber-950/40 border border-amber-800/40 text-amber-200 text-xs flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-amber-300">Local Dev Account:</span>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('admin@quizmania.dev');
+                setPassword('admin123');
+              }}
+              className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-medium text-[11px] transition-colors"
+            >
+              Quick Auto-fill
+            </button>
+          </div>
+          <div className="text-[11px] text-amber-300/80 font-mono">
+            admin@quizmania.dev (any password)
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="mb-5 p-3.5 rounded-xl bg-red-950/60 border border-red-800/60 text-red-200 text-xs flex items-start gap-2.5">
           <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />

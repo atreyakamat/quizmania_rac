@@ -9,9 +9,10 @@ import {
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  // 1. Rate Limiting: 5 attempts per minute per IP
+  // 1. Rate Limiting: 5 attempts per minute per IP in production, 50 in development
   const clientIp = getClientIp(request);
-  const rateLimit = checkRateLimit(`admin-login:${clientIp}`, 5, 60000);
+  const maxAttempts = process.env.NODE_ENV === 'production' ? 5 : 50;
+  const rateLimit = checkRateLimit(`admin-login:${clientIp}`, maxAttempts, 60000);
   if (!rateLimit.success) {
     return NextResponse.json(
       { success: false, error: 'Too many login attempts. Please try again in 1 minute.' },
@@ -60,47 +61,56 @@ export async function POST(request: Request) {
     );
   }
 
-  // 4. Test Runner Isolation (ONLY active in automated test runner, NEVER in production)
-  const isTestEnvironment = (process.env.NODE_ENV === 'test' || process.env.ENABLE_TEST_AUTH === 'true') && process.env.NODE_ENV !== 'production';
-  if (isTestEnvironment) {
+  // 4. Local Development & Test Runner Isolation (ONLY active in development/test, NEVER in production)
+  const isDevOrTest = process.env.NODE_ENV !== 'production' && (
+    process.env.NODE_ENV === 'test' ||
+    process.env.NODE_ENV === 'development' ||
+    process.env.ENABLE_TEST_AUTH === 'true'
+  );
+
+  if (isDevOrTest && (email === 'admin@quizmania.dev' || process.env.ENABLE_TEST_AUTH === 'true' || process.env.NODE_ENV === 'test')) {
     const adminRecord = await getAdminUserRecord(email);
-    if (!adminRecord) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid email or password' },
-        { status: 401 }
-      );
+    if (adminRecord && adminRecord.enabled !== false && (adminRecord.role === 'admin' || adminRecord.role === 'superadmin')) {
+      const response = NextResponse.json({
+        success: true,
+        user: {
+          id: adminRecord.user_id || adminRecord.id,
+          email: adminRecord.email,
+          role: adminRecord.role,
+        },
+      });
+
+      attachSessionCookies(response, {
+        accessToken: 'test-admin-token',
+        refreshToken: 'valid-refresh-token',
+        expiresIn: 3600,
+      });
+
+      return response;
     }
 
-    if (adminRecord.enabled === false) {
-      return NextResponse.json(
-        { success: false, error: 'Administrator account is disabled' },
-        { status: 403 }
-      );
+    if (process.env.NODE_ENV === 'test' || (process.env.ENABLE_TEST_AUTH === 'true' && email === 'admin@quizmania.dev')) {
+      if (!adminRecord) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid email or password' },
+          { status: 401 }
+        );
+      }
+
+      if (adminRecord.enabled === false) {
+        return NextResponse.json(
+          { success: false, error: 'Administrator account is disabled' },
+          { status: 403 }
+        );
+      }
+
+      if (adminRecord.role !== 'admin' && adminRecord.role !== 'superadmin') {
+        return NextResponse.json(
+          { success: false, error: 'Access denied: Your account does not have administrator privileges.' },
+          { status: 403 }
+        );
+      }
     }
-
-    if (adminRecord.role !== 'admin' && adminRecord.role !== 'superadmin') {
-      return NextResponse.json(
-        { success: false, error: 'Access denied: Your account does not have administrator privileges.' },
-        { status: 403 }
-      );
-    }
-
-    const response = NextResponse.json({
-      success: true,
-      user: {
-        id: adminRecord.user_id || adminRecord.id,
-        email: adminRecord.email,
-        role: adminRecord.role,
-      },
-    });
-
-    attachSessionCookies(response, {
-      accessToken: 'test-admin-token',
-      refreshToken: 'valid-refresh-token',
-      expiresIn: 3600,
-    });
-
-    return response;
   }
 
   // 5. Supabase Auth Verification (Real running environment)
