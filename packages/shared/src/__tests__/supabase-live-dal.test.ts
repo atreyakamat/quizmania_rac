@@ -29,7 +29,9 @@ import {
   isSupabaseDatabaseReady,
   getSupabaseAuthenticatedClient,
   requireAuthenticatedAdmin,
-  scoreAndRecordQuizSubmission
+  scoreAndRecordQuizSubmission,
+  getClubSummary,
+  exportClubSummaryCsvFromFilters
 } from '../index';
 
 async function runLiveDalTests() {
@@ -406,11 +408,23 @@ async function runLiveDalTests() {
       const liveDetail = await getResponseDetail('sub-live-1');
       assert.ok(liveDetail !== null && liveDetail.submission.id === 'sub-live-1', 'getResponseDetail fetches live submission with answers');
 
+      const liveDetailMissing = await getResponseDetail('missing-sub-id');
+      assert.ok(liveDetailMissing === null, 'getResponseDetail returns null on missing submission in live table');
+
       const liveGrade = await updateManualGrade('sub-live-1', LIVE_Q_ID, 4);
       assert.ok(liveGrade.success, 'updateManualGrade updates answer marks in live table');
 
+      const liveGradeInsert = await updateManualGrade('sub-live-1', 'non-existing-q-id', 2);
+      assert.ok(liveGradeInsert.success, 'updateManualGrade inserts new answer marks in live table');
+
       const liveCsv = await exportResponsesCsv({ quizId: LIVE_QUIZ_ID });
       assert.ok(typeof liveCsv === 'string' && liveCsv.startsWith('Submission ID'), 'exportResponsesCsv generates CSV from live data');
+
+      const liveClubSummary = await getClubSummary({ quizId: LIVE_QUIZ_ID });
+      assert.ok(liveClubSummary !== null && typeof liveClubSummary.totalResponses === 'number', 'getClubSummary runs against live data');
+
+      const liveClubSummaryCsv = await exportClubSummaryCsvFromFilters({ quizId: LIVE_QUIZ_ID });
+      assert.ok(typeof liveClubSummaryCsv === 'string' && liveClubSummaryCsv.includes('Club Name'), 'exportClubSummaryCsvFromFilters runs against live data');
 
       const liveAdmin = await getAdminUserRecord('live-admin@quizmania.dev');
       assert.ok(liveAdmin !== null && liveAdmin.role === 'admin', 'getAdminUserRecord finds user in live table');
