@@ -251,6 +251,20 @@ async function runStartRouteTests() {
     assert.ok(resRateLimit.status === 429, 'Submit rate limiter blocks excessive calls with 429');
   });
 
+  // 11. Submit: Non-existent quiz submission rejection
+  await test('11. Submit: Non-existent quiz scoring rejection', async () => {
+    const reqMissing = new Request('http://localhost:3000/api/quizzes/missing-quiz-slug/submit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '10.20.1.7' },
+      body: JSON.stringify({
+        participant: { name: 'Nobody', email: 'nobody@quizmania.dev' },
+        answers: []
+      })
+    });
+    const resMissing = await submitPost(reqMissing as any, { params: { slug: 'missing-quiz-slug' } });
+    assert.ok(resMissing.status === 400, 'Submit returns 400 when quiz is not found');
+  });
+
   console.log('All public start and submit route tests completed successfully.');
 }
 

@@ -484,6 +484,51 @@ async function runAuthRouteTests() {
       resRateLimit = await uploadPost(reqRate);
     }
     assert.ok(resRateLimit.status === 429, 'Upload rate limiter blocks excessive requests with 429');
+
+    // I. Live Storage Client Upload
+    const mockLiveUploadClient = {
+      storage: {
+        from: (bucket: string) => ({
+          upload: async (fileName: string) => ({ data: { path: `${bucket}/${fileName}` }, error: null }),
+          getPublicUrl: (path: string) => ({ data: { publicUrl: `https://storage.supabase.co/${path}` } })
+        })
+      }
+    };
+    setMockSupabaseClients({ adminClient: mockLiveUploadClient, ready: true });
+    try {
+      const fdLive = new FormData();
+      fdLive.append('file', new File(['live-content'], 'cover.png', { type: 'image/png' }));
+      fdLive.append('bucket', 'quiz-covers');
+      const reqLive = new NextRequest('http://localhost:3000/api/upload', {
+        method: 'POST',
+        body: fdLive,
+        headers: { origin: 'http://localhost:3000', host: 'localhost:3000', cookie: 'sb-access-token=test-admin-token', 'x-forwarded-for': '10.9.1.1' }
+      });
+      const resLive = await uploadPost(reqLive);
+      assert.ok(resLive.status === 200, 'Upload succeeds with live Supabase client');
+      const liveJson = await resLive.json();
+      assert.ok(liveJson.success && liveJson.url.includes('https://storage.supabase.co'), 'Live upload returns public url');
+
+      // J. Live Storage Upload Error
+      const mockLiveErrorClient = {
+        storage: {
+          from: () => ({
+            upload: async () => ({ data: null, error: new Error('Bucket quota exceeded') }),
+            getPublicUrl: () => ({ data: { publicUrl: '' } })
+          })
+        }
+      };
+      setMockSupabaseClients({ adminClient: mockLiveErrorClient, ready: true });
+      const reqLiveError = new NextRequest('http://localhost:3000/api/upload', {
+        method: 'POST',
+        body: fdLive,
+        headers: { origin: 'http://localhost:3000', host: 'localhost:3000', cookie: 'sb-access-token=test-admin-token', 'x-forwarded-for': '10.9.1.2' }
+      });
+      const resLiveError = await uploadPost(reqLiveError);
+      assert.ok(resLiveError.status === 500, 'Upload returns 500 on live storage error');
+    } finally {
+      resetSupabaseClients();
+    }
   });
 
   console.log('All admin auth route tests completed successfully.');
