@@ -103,7 +103,7 @@ export const defaultMockAdminUsers: AdminUserRecord[] = typeof window === 'undef
 function getNodeModule(name: string): any {
   if (typeof window !== 'undefined') return null;
   try {
-    const req = typeof (globalThis as any).__non_webpack_require__ !== 'undefined'
+    const req = (globalThis as any).__non_webpack_require__ !== undefined
       ? (globalThis as any).__non_webpack_require__
       : eval('require');
     return req(name);

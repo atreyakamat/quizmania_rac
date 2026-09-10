@@ -1,4 +1,4 @@
-import { randomUUID, randomBytes } from 'crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getPublishedQuizBySlug, createQuizAttempt, checkRateLimit, getClientIp } from '@quizmania/shared';
 

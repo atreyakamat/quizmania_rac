@@ -34,7 +34,7 @@ function loadEnvIfAvailable(): void {
   if (typeof window !== 'undefined') return;
   if (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return;
   try {
-    const req = typeof (globalThis as any).__non_webpack_require__ !== 'undefined'
+    const req = (globalThis as any).__non_webpack_require__ !== undefined
       ? (globalThis as any).__non_webpack_require__
       : eval('require');
     const fs = req('fs');

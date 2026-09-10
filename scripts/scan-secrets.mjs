@@ -114,8 +114,8 @@ for (const filePath of trackedFiles) {
     while ((jwtMatch = jwtRegex.exec(line)) !== null) {
       try {
         const payloadBase64 = jwtMatch[1]
-          .replace(/-/g, '+')
-          .replace(/_/g, '/');
+          .replaceAll('-', '+')
+          .replaceAll('_', '/');
         const padded = payloadBase64.padEnd(
           payloadBase64.length + ((4 - (payloadBase64.length % 4)) % 4),
           '='

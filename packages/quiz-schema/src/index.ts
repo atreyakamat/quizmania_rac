@@ -704,7 +704,7 @@ const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}
  * Never uses Math.random() or predictable PRNGs.
  */
 export function generateCanonicalUuid(): string {
-  if (typeof globalThis !== 'undefined' && globalThis.crypto) {
+  if (globalThis?.crypto) {
     if (typeof globalThis.crypto.randomUUID === 'function') {
       return globalThis.crypto.randomUUID();
     }
@@ -720,9 +720,10 @@ export function generateCanonicalUuid(): string {
 
   // Node.js fallback if globalThis.crypto is unavailable in legacy runtimes
   try {
-    const nodeCrypto = typeof (globalThis as any).__non_webpack_require__ !== 'undefined'
-      ? (globalThis as any).__non_webpack_require__('crypto')
-      : eval('require')('crypto');
+    const nonWebpackRequire = (globalThis as any).__non_webpack_require__;
+    const nodeCrypto = nonWebpackRequire !== undefined
+      ? nonWebpackRequire('node:crypto')
+      : eval('require')('node:crypto');
     if (typeof nodeCrypto.randomUUID === 'function') {
       return nodeCrypto.randomUUID();
     }
@@ -737,7 +738,7 @@ export function generateCanonicalUuid(): string {
  * Used for session tokens, attempt verification tokens, and non-colliding storage keys.
  */
 export function generateSecureToken(prefix = 'tok', byteLength = 24): string {
-  if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+  if (globalThis?.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
     const bytes = new Uint8Array(byteLength);
     globalThis.crypto.getRandomValues(bytes);
     const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
@@ -745,9 +746,10 @@ export function generateSecureToken(prefix = 'tok', byteLength = 24): string {
   }
 
   try {
-    const nodeCrypto = typeof (globalThis as any).__non_webpack_require__ !== 'undefined'
-      ? (globalThis as any).__non_webpack_require__('crypto')
-      : eval('require')('crypto');
+    const nonWebpackRequire = (globalThis as any).__non_webpack_require__;
+    const nodeCrypto = nonWebpackRequire !== undefined
+      ? nonWebpackRequire('node:crypto')
+      : eval('require')('node:crypto');
     if (typeof nodeCrypto.randomBytes === 'function') {
       return `${prefix}_${nodeCrypto.randomBytes(byteLength).toString('hex')}`;
     }
@@ -772,15 +774,16 @@ export function shuffleArray<T>(items: readonly T[]): T[] {
   for (let i = result.length - 1; i > 0; i--) {
     // Uniform index selection using standard crypto primitives
     let j = 0;
-    if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+    if (globalThis?.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
       const buffer = new Uint32Array(1);
       globalThis.crypto.getRandomValues(buffer);
       j = buffer[0] % (i + 1);
     } else {
       try {
-        const nodeCrypto = typeof (globalThis as any).__non_webpack_require__ !== 'undefined'
-          ? (globalThis as any).__non_webpack_require__('crypto')
-          : eval('require')('crypto');
+        const nonWebpackRequire = (globalThis as any).__non_webpack_require__;
+        const nodeCrypto = nonWebpackRequire !== undefined
+          ? nonWebpackRequire('node:crypto')
+          : eval('require')('node:crypto');
         j = nodeCrypto.randomInt(0, i + 1);
       } catch {
         j = 0;

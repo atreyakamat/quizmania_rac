@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminJsonResponse, requireAuthenticatedAdmin, unauthorizedResponse } from '../../../lib/auth';
 import { checkRateLimit, getClientIp, getSupabaseAdminClient, isSupabaseConfigured } from '@quizmania/shared';
@@ -53,7 +53,7 @@ function generateSafeFileName(fileName: string, expectedExt: string): string {
   // Classification: SECURITY-SENSITIVE
   // Cryptographically secure random suffix ensures storage object keys cannot be predicted,
   // enumerated, or collided by an attacker.
-  const randomSuffix = randomUUID().replace(/-/g, '').slice(0, 16);
+  const randomSuffix = randomUUID().replaceAll('-', '').slice(0, 16);
   const safeBaseName = fileName
     .replace(/\.[^/.]+$/, '')
     .replace(/[^a-zA-Z0-9_-]/g, '_')
