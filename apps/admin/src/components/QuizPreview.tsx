@@ -54,7 +54,7 @@ export function QuizPreview({ quiz, onClose }: QuizPreviewProps) {
               {quiz.title || 'Untitled Quiz'}
             </h1>
             {quiz.description && (
-              <p className="text-sm opacity-80 max-w-2xl">{quiz.description}</p>
+              <p className="text-sm opacity-80 max-w-2xl whitespace-pre-line">{quiz.description}</p>
             )}
 
             {/* Progress indicator */}

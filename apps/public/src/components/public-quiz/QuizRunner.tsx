@@ -258,7 +258,7 @@ function QuizLandingStep({
             {quiz.title}
           </h1>
           {quiz.description && (
-            <p className="text-xs sm:text-sm opacity-80 leading-relaxed">
+            <p className="text-xs sm:text-sm opacity-80 leading-relaxed whitespace-pre-line">
               {quiz.description}
             </p>
           )}
@@ -758,7 +758,7 @@ function QuizQuestionsStep({
             {question.question_text}
           </h2>
           {question.question_description && (
-            <p className="text-xs opacity-75 leading-relaxed">
+            <p className="text-xs opacity-75 leading-relaxed whitespace-pre-line">
               {question.question_description}
             </p>
           )}
