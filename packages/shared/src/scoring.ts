@@ -11,7 +11,7 @@ import type {
 } from '@quizmania/types';
 import { getSupabaseAdminClient, getSupabasePublicClient, isSupabaseAdminConfigured, isSupabaseDatabaseReady } from './supabase';
 import { mockStore } from './mock-data';
-import { generateCanonicalUuid } from '@quizmania/quiz-schema';
+import { generateCanonicalUuid, isCanonicalUuid } from '@quizmania/quiz-schema';
 
 interface ScoreContext {
   question: Question;
@@ -238,38 +238,73 @@ export async function processQuizSubmission(
   return scoreAndRecordQuizSubmission(quizId, payload);
 }
 
-async function fetchQuizForSubmission(quizIdentifier: string, isLive: boolean): Promise<Quiz | null> {
-  if (isLive) {
-    const supabase = getSupabaseAdminClient();
-    if (!supabase) return null;
-    let { data } = await supabase
+async function fetchLiveQuizForSubmission(
+  supabase: any,
+  quizIdentifier: string
+): Promise<{ quiz: Quiz | null; error?: string }> {
+  const selectQuery = '*, questions(*, options(*))';
+  if (isCanonicalUuid(quizIdentifier)) {
+    const { data, error } = await supabase
       .from('quizzes')
-      .select('*, questions(*, options(*))')
+      .select(selectQuery)
       .eq('id', quizIdentifier)
       .eq('status', 'published')
       .maybeSingle();
 
-    if (!data) {
-      const res = await supabase
-        .from('quizzes')
-        .select('*, questions(*, options(*))')
-        .eq('slug', quizIdentifier)
-        .eq('status', 'published')
-        .maybeSingle();
-      data = res.data;
+    if (error) {
+      return { quiz: null, error: `Database error querying quiz by ID: ${error.message}` };
     }
-    return data ? (data as unknown as Quiz) : null;
+    if (data) {
+      return { quiz: data as unknown as Quiz };
+    }
   }
 
-  if (process.env.NODE_ENV === 'production') return null;
+  const res = await supabase
+    .from('quizzes')
+    .select(selectQuery)
+    .eq('slug', quizIdentifier)
+    .eq('status', 'published')
+    .maybeSingle();
+
+  if (res.error) {
+    return { quiz: null, error: `Database error querying quiz by slug: ${res.error.message}` };
+  }
+
+  return { quiz: res.data ? (res.data as unknown as Quiz) : null };
+}
+
+async function fetchQuizForSubmission(
+  quizIdentifier: string,
+  isLive: boolean
+): Promise<{ quiz: Quiz | null; error?: string }> {
+  if (isLive) {
+    if (!isSupabaseAdminConfigured()) {
+      return {
+        quiz: null,
+        error: 'Database service configuration missing: SUPABASE_SERVICE_ROLE_KEY is not configured in the server environment.'
+      };
+    }
+    const supabase = getSupabaseAdminClient();
+    if (!supabase) {
+      return {
+        quiz: null,
+        error: 'Database service client could not be initialized.'
+      };
+    }
+    return fetchLiveQuizForSubmission(supabase, quizIdentifier);
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    return { quiz: null, error: 'Database connection unavailable in production environment' };
+  }
   const found = mockStore.getQuizzes().find(q => q.id === quizIdentifier || q.slug === quizIdentifier);
-  return found?.status === 'published' ? found : null;
+  return { quiz: found?.status === 'published' ? found : null };
 }
 
 async function isDuplicateAttempt(attemptId: string | undefined, isLive: boolean): Promise<boolean> {
   if (!attemptId) return false;
   if (isLive) {
-    const supabase = getSupabaseAdminClient() || getSupabasePublicClient();
+    const supabase = getSupabaseAdminClient();
     if (!supabase) return false;
     const { data } = await supabase
       .from('submissions')
@@ -320,9 +355,9 @@ async function saveLiveSubmission(
   breakdown: QuestionBreakdown[],
   answerMap: Map<string, SelectedAnswer>
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = getSupabaseAdminClient() || getSupabasePublicClient();
+  const supabase = getSupabaseAdminClient();
   if (!supabase) {
-    return { success: false, error: 'Database service client not available' };
+    return { success: false, error: 'Database service client not available for recording submissions' };
   }
 
   const { data: subData, error: subError } = await supabase
@@ -390,9 +425,12 @@ export async function scoreAndRecordQuizSubmission(
   payload: QuizSubmissionPayload
 ): Promise<{ success: boolean; result?: QuizSubmissionResult; error?: string }> {
   const isLive = await isSupabaseDatabaseReady();
-  const quiz = await fetchQuizForSubmission(quizIdentifier, isLive);
+  const { quiz, error: fetchError } = await fetchQuizForSubmission(quizIdentifier, isLive);
 
   if (!quiz) {
+    if (fetchError) {
+      return { success: false, error: fetchError };
+    }
     if (!isLive && process.env.NODE_ENV === 'production') {
       return { success: false, error: 'Database connection unavailable in production environment' };
     }
