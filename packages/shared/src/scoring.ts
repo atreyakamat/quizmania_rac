@@ -281,7 +281,7 @@ async function fetchQuizForSubmission(
     if (!isSupabaseAdminConfigured()) {
       return {
         quiz: null,
-        error: 'Database service configuration missing: SUPABASE_SERVICE_ROLE_KEY is not configured in the server environment.'
+        error: 'Database service configuration missing: SUPABASE_SECRET_KEY is not configured in the server environment.'
       };
     }
     const supabase = getSupabaseAdminClient();
